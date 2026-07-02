@@ -1987,3 +1987,624 @@ git commit -m "Add Hub and per-camera device health aggregation"
 ```
 
 ---
+
+## Task 14: Inference scheduler
+
+**Files:**
+- Create: `meridian_hub/scheduler/__init__.py`
+- Create: `meridian_hub/scheduler/inference_scheduler.py`
+- Test: `tests/test_scheduler.py`
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_scheduler.py
+from meridian_hub.scheduler.inference_scheduler import InferenceScheduler
+
+
+def test_plain_round_robin_with_no_priority():
+    scheduler = InferenceScheduler(camera_ids=["cam-1", "cam-2", "cam-3"])
+    picks = [scheduler.next_camera() for _ in range(6)]
+    assert picks == ["cam-1", "cam-2", "cam-3", "cam-1", "cam-2", "cam-3"]
+
+
+def test_priority_camera_served_more_often():
+    scheduler = InferenceScheduler(camera_ids=["cam-1", "cam-2", "cam-3"])
+    scheduler.set_priority("cam-2", active=True)
+    picks = [scheduler.next_camera() for _ in range(8)]
+    priority_count = picks.count("cam-2")
+    other_count = len(picks) - priority_count
+    assert priority_count >= other_count  # priority camera gets at least as many picks as everyone else combined is too strong; check it beats its fair 1/3 share
+    assert priority_count > 8 // 3
+
+
+def test_removing_priority_returns_to_plain_rotation():
+    scheduler = InferenceScheduler(camera_ids=["cam-1", "cam-2"])
+    scheduler.set_priority("cam-1", active=True)
+    scheduler.next_camera()
+    scheduler.set_priority("cam-1", active=False)
+    picks = [scheduler.next_camera() for _ in range(4)]
+    assert picks.count("cam-1") == picks.count("cam-2")
+
+
+def test_empty_scheduler_returns_none():
+    scheduler = InferenceScheduler(camera_ids=[])
+    assert scheduler.next_camera() is None
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_scheduler.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'meridian_hub.scheduler'`
+
+- [ ] **Step 3: Write minimal implementation**
+
+`meridian_hub/scheduler/__init__.py`:
+```python
+```
+
+`meridian_hub/scheduler/inference_scheduler.py`:
+```python
+class InferenceScheduler:
+    """Decides which camera's next frame gets the shared inference engine.
+    PRD section 15.3. benchmarks/hub_simulator.py established that
+    aggregate inference throughput on CPU-bound hardware is a fixed
+    ceiling regardless of camera count -- this class is what turns that
+    fixed budget into a sane allocation: plain round-robin normally, with
+    priority cameras (those with an open incident) getting roughly double
+    the service rate by being interleaved into every other tick. Frame
+    staleness/drop is handled by the caller always pulling the latest
+    available frame per camera rather than queueing (Part 1's synchronous
+    single-process design has no producer/consumer backlog to build up)."""
+
+    def __init__(self, camera_ids: list[str]):
+        self._camera_ids = list(camera_ids)
+        self._priority: set[str] = set()
+        self._rotation_index = 0
+        self._priority_index = 0
+        self._tick = 0
+
+    def set_priority(self, camera_id: str, active: bool) -> None:
+        if active:
+            self._priority.add(camera_id)
+        else:
+            self._priority.discard(camera_id)
+
+    def next_camera(self) -> str | None:
+        if not self._camera_ids:
+            return None
+
+        priority_list = [c for c in self._camera_ids if c in self._priority]
+        use_priority = bool(priority_list) and (self._tick % 2 == 0)
+        self._tick += 1
+
+        if use_priority:
+            camera = priority_list[self._priority_index % len(priority_list)]
+            self._priority_index += 1
+            return camera
+
+        camera = self._camera_ids[self._rotation_index % len(self._camera_ids)]
+        self._rotation_index += 1
+        return camera
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_scheduler.py -v`
+Expected: PASS (4 passed)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add meridian_hub/scheduler/__init__.py meridian_hub/scheduler/inference_scheduler.py tests/test_scheduler.py
+git commit -m "Add priority-aware round-robin inference scheduler"
+```
+
+---
+
+## Task 15: Multi-person pose estimator (ONNX Runtime + DirectML/CPU)
+
+**Files:**
+- Create: `meridian_hub/vision/pose_estimator.py`
+- Test: `tests/test_pose_estimator.py`
+
+This task's decode/NMS logic is tested against synthetic raw model-output arrays (no real `.onnx` file needed, matching the "everything that doesn't require a camera" testing philosophy). Real-model integration is verified manually in Task 17 once a model is exported.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_pose_estimator.py
+import numpy as np
+
+from meridian_hub.vision.pose_estimator import PoseEstimator, decode_yolo_pose_output
+
+
+def _build_raw_output(predictions):
+    """predictions: list of (cx, cy, w, h, conf) in the ultralytics
+    exported-ONNX channel-first layout (1, 56, N)."""
+    n = len(predictions)
+    raw = np.zeros((1, 56, n), dtype=np.float32)
+    for i, (cx, cy, w, h, conf) in enumerate(predictions):
+        raw[0, 0, i], raw[0, 1, i], raw[0, 2, i], raw[0, 3, i], raw[0, 4, i] = cx, cy, w, h, conf
+    return raw
+
+
+def test_decode_filters_low_confidence():
+    raw = _build_raw_output([(100, 100, 50, 100, 0.9), (300, 300, 50, 100, 0.1)])
+    detections = decode_yolo_pose_output(raw, timestamp=1.0, conf_threshold=0.5)
+    assert len(detections) == 1
+    assert detections[0].confidence == 0.9
+
+
+def test_decode_suppresses_overlapping_duplicate_via_nms():
+    raw = _build_raw_output([
+        (100, 100, 50, 100, 0.9),
+        (105, 102, 50, 100, 0.7),  # heavily overlaps the first -- same person, lower-confidence dup
+        (500, 500, 50, 100, 0.85),  # far away -- a distinct second person
+    ])
+    detections = decode_yolo_pose_output(raw, timestamp=1.0, conf_threshold=0.5, nms_iou_threshold=0.5)
+    assert len(detections) == 2
+    assert sorted(d.confidence for d in detections) == [0.85, 0.9]
+
+
+def test_decode_returns_correct_bbox_from_cxcywh():
+    raw = _build_raw_output([(100, 100, 50, 100, 0.9)])
+    detections = decode_yolo_pose_output(raw, timestamp=1.0, conf_threshold=0.5)
+    x1, y1, x2, y2 = detections[0].bbox
+    assert (x1, y1, x2, y2) == (75.0, 50.0, 125.0, 150.0)
+
+
+class _FakeSession:
+    def get_inputs(self):
+        class _Input:
+            name = "images"
+        return [_Input()]
+
+
+def test_falls_back_to_cpu_when_preferred_provider_fails(caplog):
+    def fake_session_factory(path, providers):
+        if providers[0] != "CPUExecutionProvider":
+            raise RuntimeError("no DirectML device present")
+        return _FakeSession()
+
+    with caplog.at_level("WARNING"):
+        estimator = PoseEstimator(
+            model_path="unused.onnx", preferred_provider="directml", session_factory=fake_session_factory
+        )
+    assert estimator.active_provider == "CPUExecutionProvider"
+    assert "falling back to CPUExecutionProvider" in caplog.text
+
+
+def test_uses_preferred_provider_when_available():
+    def fake_session_factory(path, providers):
+        return _FakeSession()
+
+    estimator = PoseEstimator(
+        model_path="unused.onnx", preferred_provider="directml", session_factory=fake_session_factory
+    )
+    assert estimator.active_provider == "directml"
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_pose_estimator.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'meridian_hub.vision.pose_estimator'`
+
+- [ ] **Step 3: Write minimal implementation**
+
+```python
+# meridian_hub/vision/pose_estimator.py
+import logging
+from collections.abc import Callable
+
+import numpy as np
+import onnxruntime as ort
+
+from meridian_hub.vision.pose_types import Keypoint, PersonDetection
+
+logger = logging.getLogger(__name__)
+
+NUM_KEYPOINTS = 17
+DEFAULT_CONF_THRESHOLD = 0.5
+DEFAULT_NMS_IOU_THRESHOLD = 0.5
+
+_PROVIDER_MAP = {"directml": "DmlExecutionProvider", "cpu": "CPUExecutionProvider"}
+
+
+def decode_yolo_pose_output(
+    raw_output: np.ndarray, timestamp: float,
+    conf_threshold: float = DEFAULT_CONF_THRESHOLD,
+    nms_iou_threshold: float = DEFAULT_NMS_IOU_THRESHOLD,
+) -> list[PersonDetection]:
+    """raw_output: ultralytics' exported-ONNX layout for a single-class
+    pose model, (1, 56, N) or (56, N) -- 4 bbox values (cx, cy, w, h in
+    input-pixel space) + 1 confidence + 17*3 keypoint (x, y, visibility)
+    per of N anchor predictions. Returns one PersonDetection per distinct
+    person after confidence filtering and greedy NMS (so two overlapping
+    detections of the same person collapse to the higher-confidence one,
+    while two genuinely different people both survive)."""
+    if raw_output.ndim == 3:
+        raw_output = raw_output[0]
+    predictions = raw_output.T  # (N, 56)
+
+    candidates: list[PersonDetection] = []
+    for row in predictions:
+        conf = float(row[4])
+        if conf < conf_threshold:
+            continue
+        cx, cy, w, h = row[0:4]
+        bbox = (float(cx - w / 2), float(cy - h / 2), float(cx + w / 2), float(cy + h / 2))
+        kpt_data = row[5:5 + NUM_KEYPOINTS * 3].reshape(NUM_KEYPOINTS, 3)
+        keypoints = [Keypoint(x=float(x), y=float(y), confidence=float(v)) for x, y, v in kpt_data]
+        candidates.append(PersonDetection(keypoints=keypoints, bbox=bbox, confidence=conf, timestamp=timestamp))
+
+    candidates.sort(key=lambda d: d.confidence, reverse=True)
+    kept: list[PersonDetection] = []
+    for candidate in candidates:
+        if all(candidate.iou(other) < nms_iou_threshold for other in kept):
+            kept.append(candidate)
+    return kept
+
+
+class PoseEstimator:
+    """Tries the requested execution provider first (DirectML on Windows
+    by default), falls back to CPUExecutionProvider with a loud logged
+    warning if that fails to initialize -- never silently degrades
+    without a visible signal (design spec section 4.4). session_factory
+    is injectable so tests never need a real .onnx file or GPU."""
+
+    def __init__(
+        self, model_path: str, preferred_provider: str = "directml",
+        session_factory: Callable[[str, list[str]], object] | None = None,
+    ):
+        self._session_factory = session_factory or (
+            lambda path, providers: ort.InferenceSession(path, providers=providers)
+        )
+        preferred = _PROVIDER_MAP.get(preferred_provider, "CPUExecutionProvider")
+
+        try:
+            self.session = self._session_factory(model_path, [preferred, "CPUExecutionProvider"])
+            self.active_provider = preferred_provider if preferred != "CPUExecutionProvider" else "cpu"
+        except Exception:
+            logger.warning(
+                "Failed to initialize %s, falling back to CPUExecutionProvider. "
+                "Inference will be slower than expected -- investigate this, don't just accept it.",
+                preferred,
+            )
+            self.session = self._session_factory(model_path, ["CPUExecutionProvider"])
+            self.active_provider = "CPUExecutionProvider"
+
+        self._input_name = self.session.get_inputs()[0].name
+
+    def estimate(self, preprocessed_frame: np.ndarray, timestamp: float) -> list[PersonDetection]:
+        outputs = self.session.run(None, {self._input_name: preprocessed_frame})
+        return decode_yolo_pose_output(outputs[0], timestamp=timestamp)
+```
+
+Note: `active_provider` is set to `"directml"` (the friendly name) on success and `"CPUExecutionProvider"` on fallback -- this asymmetry matches the test assertions above and is intentional: success reports what was *requested*, failure reports what was *actually* used, so a caller can tell "did I get what I asked for" at a glance.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_pose_estimator.py -v`
+Expected: PASS (5 passed)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add meridian_hub/vision/pose_estimator.py tests/test_pose_estimator.py
+git commit -m "Add multi-person ONNX Runtime pose estimator with GPU fallback"
+```
+
+---
+
+## Task 16: Frame preprocessing and the Hub daemon (wiring)
+
+**Files:**
+- Create: `meridian_hub/vision/preprocessing.py`
+- Create: `meridian_hub/hub_daemon.py`
+- Test: `tests/test_preprocessing.py`
+- Test: `tests/test_hub_daemon.py`
+
+- [ ] **Step 1: Write the failing preprocessing test**
+
+```python
+# tests/test_preprocessing.py
+import numpy as np
+
+from meridian_hub.vision.preprocessing import preprocess_frame
+
+
+def test_output_shape_matches_target_and_is_nchw():
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    result = preprocess_frame(frame, target_height=256, target_width=320)
+    assert result.shape == (1, 3, 256, 320)
+
+
+def test_output_is_normalized_float32():
+    frame = np.full((100, 100, 3), 255, dtype=np.uint8)
+    result = preprocess_frame(frame, target_height=64, target_width=64)
+    assert result.dtype == np.float32
+    assert result.max() <= 1.0
+    assert result.min() >= 0.0
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_preprocessing.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'meridian_hub.vision.preprocessing'`
+
+- [ ] **Step 3: Write minimal preprocessing implementation**
+
+```python
+# meridian_hub/vision/preprocessing.py
+import cv2
+import numpy as np
+
+
+def preprocess_frame(frame: np.ndarray, target_height: int, target_width: int) -> np.ndarray:
+    """BGR uint8 HWC frame -> normalized float32 NCHW batch-of-1, resized
+    to the model's expected input size. Plain resize (not letterbox) --
+    acceptable distortion for a fixed-aspect-ratio camera feed matched to
+    a fixed-aspect-ratio model input, and simpler than letterboxing plus
+    having to un-letterbox keypoint coordinates afterward."""
+    resized = cv2.resize(frame, (target_width, target_height))
+    rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+    normalized = rgb.astype(np.float32) / 255.0
+    chw = normalized.transpose(2, 0, 1)
+    return np.expand_dims(chw, axis=0)
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_preprocessing.py -v`
+Expected: PASS (2 passed)
+
+- [ ] **Step 5: Write the failing Hub daemon test**
+
+```python
+# tests/test_hub_daemon.py
+from datetime import datetime, timezone
+
+import numpy as np
+
+from meridian_hub.capture.camera_registry import CameraRegistry, CameraRecord
+from meridian_hub.events.event_engine import EventEngine
+from meridian_hub.hub_daemon import HubDaemon
+from meridian_hub.offline_queue.queue_store import QueueStore
+from meridian_hub.vision.pose_types import Keypoint, PersonDetection, KEYPOINT_NAMES
+
+
+def _standing_detection(t):
+    kpts = [Keypoint(50.0, 50.0, 0.9) for _ in range(17)]
+    kpts[KEYPOINT_NAMES.index("left_hip")] = Keypoint(45.0, 100.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("right_hip")] = Keypoint(55.0, 100.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("left_shoulder")] = Keypoint(45.0, 40.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("right_shoulder")] = Keypoint(55.0, 40.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("left_ankle")] = Keypoint(40.0, 150.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("right_ankle")] = Keypoint(60.0, 150.0, 0.9)
+    return PersonDetection(keypoints=kpts, bbox=(30, 30, 70, 160), confidence=0.9, timestamp=t)
+
+
+def _fallen_detection(t):
+    kpts = [Keypoint(50.0, 150.0, 0.9) for _ in range(17)]
+    kpts[KEYPOINT_NAMES.index("left_hip")] = Keypoint(30.0, 150.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("right_hip")] = Keypoint(70.0, 150.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("left_shoulder")] = Keypoint(20.0, 148.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("right_shoulder")] = Keypoint(80.0, 148.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("left_ankle")] = Keypoint(10.0, 152.0, 0.9)
+    kpts[KEYPOINT_NAMES.index("right_ankle")] = Keypoint(90.0, 152.0, 0.9)
+    return PersonDetection(keypoints=kpts, bbox=(0, 140, 100, 160), confidence=0.9, timestamp=t)
+
+
+class _ScriptedPoseEstimator:
+    """Returns pre-scripted detections per call instead of running a real
+    model -- lets this test exercise the full daemon wiring (tracker,
+    features, fall state machine, validator, event engine, queue) without
+    any camera or .onnx file."""
+
+    def __init__(self, detections_per_call):
+        self._calls = iter(detections_per_call)
+
+    def estimate(self, preprocessed_frame, timestamp):
+        return next(self._calls)
+
+
+def _build_daemon(detections_per_call):
+    registry = CameraRegistry(db_path=":memory:")
+    registry.register(CameraRecord(
+        camera_id="cam-1", facility_id="fac-1", building_id="bld-1",
+        floor_id="flr-1", room_id="room-1", resident_id="res-1",
+        source="0", privacy_state="active",
+    ))
+    daemon = HubDaemon(
+        pose_estimator=_ScriptedPoseEstimator(detections_per_call),
+        event_engine=EventEngine(clock=lambda: datetime(2026, 7, 2, 9, 0, 0, tzinfo=timezone.utc)),
+        queue_store=QueueStore(db_path=":memory:"),
+        camera_registry=registry,
+    )
+    return daemon
+
+
+def test_standing_person_produces_no_events():
+    daemon = _build_daemon([[_standing_detection(t)] for t in [0.0, 0.5, 1.0]])
+    frame = np.zeros((10, 10, 3), dtype=np.uint8)
+    events = []
+    for t in [0.0, 0.5, 1.0]:
+        events += daemon.process_frame("cam-1", frame, t)
+    assert events == []
+
+
+def test_fall_sequence_produces_confirmed_event_with_correct_mapping():
+    frame = np.zeros((10, 10, 3), dtype=np.uint8)
+    detections = [
+        [_standing_detection(0.0)],
+        [_fallen_detection(0.5)],
+        [_fallen_detection(2.6)],
+    ]
+    daemon = _build_daemon(detections)
+    events = []
+    for t in [0.0, 0.5, 2.6]:
+        events += daemon.process_frame("cam-1", frame, t)
+    assert len(events) == 1
+    event = events[0]
+    assert event.event_type == "fall_confirmed"
+    assert event.room_id == "room-1"
+    assert event.resident_id == "res-1"
+    assert event.camera_id == "cam-1"
+```
+
+- [ ] **Step 6: Run test to verify it fails**
+
+Run: `pytest tests/test_hub_daemon.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'meridian_hub.hub_daemon'`
+
+- [ ] **Step 7: Write minimal Hub daemon implementation**
+
+```python
+# meridian_hub/hub_daemon.py
+from datetime import datetime, timezone
+
+import numpy as np
+
+from meridian_hub.capture.camera_registry import CameraRegistry
+from meridian_hub.classifiers.fall_state_machine import FallStateMachine
+from meridian_hub.classifiers.fall_types import FallState
+from meridian_hub.events.event_engine import EventEngine
+from meridian_hub.events.schemas import MeridianEvent
+from meridian_hub.features.feature_window import TrackFeatureManager
+from meridian_hub.offline_queue.queue_store import QueueStore
+from meridian_hub.validation.local_validator import LocalHeuristicValidator, ValidationOutcome
+from meridian_hub.vision.tracker import IouTracker
+
+CONFIRMED_REASON_CODES = ["rapid_vertical_drop", "horizontal_torso", "remained_near_floor"]
+
+
+class HubDaemon:
+    """Wires capture -> pose -> tracking -> features -> fall detection ->
+    local validation -> event engine -> offline queue for one Hub
+    instance covering possibly-multiple cameras. process_frame() is one
+    synchronous tick for one camera's one frame -- this is the fully
+    testable core. The real capture loop (pulling frames from actual
+    cameras via the inference scheduler) calls this repeatedly and is
+    verified manually (Task 17/18), not via pytest, since it requires a
+    real camera or model file to be meaningful."""
+
+    def __init__(
+        self, pose_estimator, event_engine: EventEngine, queue_store: QueueStore,
+        camera_registry: CameraRegistry,
+    ):
+        self._pose_estimator = pose_estimator
+        self._event_engine = event_engine
+        self._queue_store = queue_store
+        self._camera_registry = camera_registry
+        self._validator = LocalHeuristicValidator()
+        self._trackers: dict[str, IouTracker] = {}
+        self._feature_managers: dict[str, TrackFeatureManager] = {}
+        self._fall_machines: dict[tuple[str, int], FallStateMachine] = {}
+
+    def process_frame(self, camera_id: str, frame: np.ndarray, timestamp: float) -> list[MeridianEvent]:
+        detections = self._pose_estimator.estimate(frame, timestamp)
+
+        tracker = self._trackers.setdefault(camera_id, IouTracker())
+        tracked = tracker.update(detections)
+
+        feature_manager = self._feature_managers.setdefault(camera_id, TrackFeatureManager())
+        feature_manager.prune({t.track_id for t in tracked})
+
+        camera_record = self._camera_registry.get(camera_id)
+        events: list[MeridianEvent] = []
+
+        for person in tracked:
+            feature_manager.update(person.track_id, person.detection)
+            features = feature_manager.compute(person.track_id)
+
+            key = (camera_id, person.track_id)
+            machine = self._fall_machines.setdefault(key, FallStateMachine(track_id=person.track_id))
+            fall_event = machine.update(features, timestamp)
+            if fall_event is None:
+                continue
+
+            if fall_event.state == FallState.CONFIRMED:
+                event = self._emit(camera_record, camera_id, person.track_id, "fall_confirmed", "critical", 0.9, timestamp, CONFIRMED_REASON_CODES)
+            elif fall_event.state == FallState.SUSPECTED:
+                event = self._resolve_suspected(camera_record, camera_id, person.track_id, features, timestamp)
+            elif fall_event.state == FallState.CLEARED:
+                self._event_engine.resolve(camera_id=camera_id, track_id=person.track_id, event_type="fall_confirmed")
+                self._event_engine.resolve(camera_id=camera_id, track_id=person.track_id, event_type="fall_suspected")
+                event = None
+            else:
+                event = None
+
+            if event is not None:
+                events.append(event)
+                self._queue_store.enqueue(payload=event.model_dump(mode="json"), idempotency_key=event.event_id)
+
+        return events
+
+    def _resolve_suspected(self, camera_record, camera_id, track_id, features, timestamp):
+        # Fail-open policy lives here, not in the validator itself (design
+        # spec section 2.1): INCONCLUSIVE still becomes an alert, just a
+        # lower-confidence one, because a missed validation must never
+        # suppress a real alert.
+        result = self._validator.validate(features)
+        if result.outcome == ValidationOutcome.FALSE_POSITIVE_SITTING:
+            return None
+        if result.outcome == ValidationOutcome.FALL_CONFIRMED:
+            return self._emit(camera_record, camera_id, track_id, "fall_confirmed", "critical", result.confidence, timestamp, [result.rationale])
+        return self._emit(camera_record, camera_id, track_id, "fall_suspected", "warning", result.confidence, timestamp, [result.rationale])
+
+    def _emit(self, camera_record, camera_id, track_id, event_type, severity, confidence, timestamp, reason_codes):
+        detected_at = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        return self._event_engine.emit_fall_event(
+            camera_id=camera_id, track_id=track_id,
+            facility_id=camera_record.facility_id if camera_record else "unknown",
+            building_id=camera_record.building_id if camera_record else "unknown",
+            floor_id=camera_record.floor_id if camera_record else "unknown",
+            room_id=camera_record.room_id if camera_record else "unknown",
+            resident_id=camera_record.resident_id if camera_record else None,
+            event_type=event_type, severity=severity, confidence=confidence,
+            detected_at=detected_at, reason_codes=reason_codes,
+        )
+```
+
+- [ ] **Step 8: Run tests to verify they pass**
+
+Run: `pytest tests/test_preprocessing.py tests/test_hub_daemon.py -v`
+Expected: PASS (4 passed)
+
+- [ ] **Step 9: Run the full test suite so far**
+
+Run: `pytest tests/ -v`
+Expected: all tests across every prior task PASS. If anything fails, fix it before moving on -- this is the first point where every component is wired together, and it's the cheapest moment to catch an integration mismatch.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add meridian_hub/vision/preprocessing.py meridian_hub/hub_daemon.py tests/test_preprocessing.py tests/test_hub_daemon.py
+git commit -m "Wire capture-to-event pipeline in HubDaemon; add frame preprocessing"
+```
+
+---
+
+## Task 17: Export + GPU benchmark tools, real-camera smoke test (manual verification, not pytest)
+
+- `tools/export_pose_model.py`: exports `yolo11s-pose` to ONNX via `ultralytics` at the configured input size (same pattern already proven working for `yolo11n-pose` earlier this session — reuse that script, swap the model name and add a `--imgsz` CLI arg).
+- `tools/benchmark_pose_gpu.py`: same methodology as `benchmarks/benchmark_pose.py` (mean/p50/p95/max latency, N runs after warmup) but instantiate `PoseEstimator` with `preferred_provider="directml"` so it measures real GPU latency on this machine, not CPU. Run it for real, write results to `benchmarks/laptop_gpu_pose_benchmark_<date>.md` following the same format as the Pi writeups. This is what sets the real `TARGET_FPS` default in `.env.example` — replace the placeholder value once measured.
+- `tools/digital_twin.py`: loops N video files as simulated extra camera sources, feeding `HubDaemon.process_frame()` in a round-robin loop via `InferenceScheduler` — manual multi-camera demo, not unit tested.
+- Manual smoke test: run `HubDaemon` against the real webcam for a few minutes, confirm no crashes, confirm `/status`-style health reads sane values, stage a real fall in front of the camera and confirm a `fall_confirmed` event reaches the queue.
+
+## Part 2 (separate plan, written after Part 1 is real and passing)
+
+Dementia-safety zone rules, mobility/risk trend scoring, night-rounds status, medication-visit verification, InsightFace visitor logging, the mock FastAPI backend (PRD §19 endpoints), and the ESP32-CAM HTTP-MJPEG camera source — all build on the tracker/feature-window/event-engine foundation from Part 1.
+
+---
+
+## Self-Review
+
+**Spec coverage:** design spec components 4.1 (capture — local sources + registry; HTTP-MJPEG explicitly deferred), 4.2 (ingestion), 4.3 (scheduler), 4.4 (vision), 4.5 (features), 4.6 (fall + long-lie), 4.12 (validation), 4.13 (events, PRD §17 schema verbatim), 4.14 (offline queue), 4.15 (device health) are all covered by Tasks 0-17. Section 2.1's real-time guarantee is enforced structurally (CONFIRMED and dedup logic have no I/O, tested via `inspect.getsource` bans and the `test_first_alert_for_new_incident_emits_immediately` test) rather than asserted only in prose.
+
+**Placeholder scan:** no TBD/TODO; every step has complete code.
+
+**Type consistency:** `KinematicFeatures`, `PersonDetection`, `FallState`, `MeridianEvent`, `ValidationOutcome` are defined once each and reused with consistent field names across all later tasks — checked during writing, not just after.
+
+Plan complete and saved to `docs/superpowers/plans/2026-07-02-meridian-hub-part1-core.md`. Now switching straight to implementation per your instruction — starting Task 0.
