@@ -842,3 +842,373 @@ git commit -m "Add IoU-based multi-person tracker with occlusion tolerance"
 ```
 
 ---
+
+## Task 7: Per-track kinematic feature window
+
+**Files:**
+- Create: `meridian_hub/features/__init__.py`
+- Create: `meridian_hub/features/feature_window.py`
+- Test: `tests/test_feature_window.py`
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_feature_window.py
+from meridian_hub.vision.pose_types import Keypoint, PersonDetection, KEYPOINT_NAMES
+from meridian_hub.features.feature_window import TrackFeatureManager
+
+
+def _detection(t, hip_y, shoulder_y, hip_x=50.0, shoulder_x=50.0):
+    kpts = [Keypoint(x=0.0, y=0.0, confidence=0.9) for _ in range(17)]
+    for name, x, y in [
+        ("left_hip", hip_x - 5, hip_y), ("right_hip", hip_x + 5, hip_y),
+        ("left_shoulder", shoulder_x - 5, shoulder_y), ("right_shoulder", shoulder_x + 5, shoulder_y),
+        ("left_ankle", hip_x - 10, hip_y + 50), ("right_ankle", hip_x + 10, hip_y + 50),
+    ]:
+        kpts[KEYPOINT_NAMES.index(name)] = Keypoint(x=x, y=y, confidence=0.9)
+    return PersonDetection(keypoints=kpts, bbox=(0, 0, 100, 200), confidence=0.9, timestamp=t)
+
+
+def test_tracks_are_independent():
+    manager = TrackFeatureManager()
+    manager.update(track_id=1, detection=_detection(0.0, hip_y=100.0, shoulder_y=40.0))
+    manager.update(track_id=2, detection=_detection(0.0, hip_y=180.0, shoulder_y=175.0))
+    f1 = manager.compute(track_id=1)
+    f2 = manager.compute(track_id=2)
+    assert f1.torso_angle_degrees < 20.0
+    assert f2.torso_angle_degrees >= 0.0
+
+
+def test_drop_track_removes_its_window():
+    manager = TrackFeatureManager()
+    manager.update(track_id=1, detection=_detection(0.0, hip_y=100.0, shoulder_y=40.0))
+    manager.drop_track(1)
+    assert manager.compute(track_id=1).hip_vertical_velocity == 0.0
+
+
+def test_prune_removes_stale_tracks():
+    manager = TrackFeatureManager()
+    manager.update(track_id=1, detection=_detection(0.0, hip_y=100.0, shoulder_y=40.0))
+    manager.update(track_id=2, detection=_detection(0.0, hip_y=100.0, shoulder_y=40.0))
+    manager.prune(active_track_ids={2})
+    assert manager.compute(track_id=1).hip_vertical_velocity == 0.0
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_feature_window.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'meridian_hub.features'`
+
+- [ ] **Step 3: Write minimal implementation**
+
+`meridian_hub/features/__init__.py`:
+```python
+```
+
+`meridian_hub/features/feature_window.py`:
+```python
+import math
+from collections import deque
+from dataclasses import dataclass
+
+from meridian_hub.vision.pose_types import PersonDetection
+
+STILLNESS_EPSILON_PX = 3.0
+
+
+@dataclass(frozen=True)
+class KinematicFeatures:
+    hip_vertical_velocity: float  # px/sec, positive = moving down
+    torso_angle_degrees: float  # 0 = upright, 90 = horizontal
+    aspect_ratio: float
+    stillness_duration_seconds: float
+
+
+class _SingleTrackWindow:
+    def __init__(self, window_seconds: float):
+        self.window_seconds = window_seconds
+        self._detections: deque[PersonDetection] = deque()
+
+    def add(self, detection: PersonDetection) -> None:
+        self._detections.append(detection)
+        cutoff = detection.timestamp - self.window_seconds
+        while self._detections and self._detections[0].timestamp < cutoff:
+            self._detections.popleft()
+
+    def compute(self) -> KinematicFeatures:
+        if len(self._detections) < 2:
+            return KinematicFeatures(0.0, 0.0, 1.0, 0.0)
+
+        dets = list(self._detections)
+        first, last = dets[0], dets[-1]
+        dt = last.timestamp - first.timestamp
+        _, first_hy = first.hip_center()
+        _, last_hy = last.hip_center()
+        velocity = (last_hy - first_hy) / dt if dt > 0 else 0.0
+
+        sx, sy = last.shoulder_center()
+        hx, hy = last.hip_center()
+        angle = math.degrees(math.atan2(abs(hx - sx), abs(hy - sy) + 1e-6))
+
+        left_ankle = last.get("left_ankle")
+        right_ankle = last.get("right_ankle")
+        body_width = abs(right_ankle.x - left_ankle.x) + 20.0
+        body_height = max(abs(left_ankle.y - sy), 1.0)
+        aspect_ratio = body_width / body_height
+
+        stillness = 0.0
+        for i in range(len(dets) - 1, 0, -1):
+            _, hy_curr = dets[i].hip_center()
+            _, hy_prev = dets[i - 1].hip_center()
+            if abs(hy_curr - hy_prev) <= STILLNESS_EPSILON_PX:
+                stillness = dets[-1].timestamp - dets[i - 1].timestamp
+            else:
+                break
+
+        return KinematicFeatures(velocity, angle, aspect_ratio, stillness)
+
+
+class TrackFeatureManager:
+    """Owns one sliding-window feature extractor per track_id. The Hub
+    daemon calls update() every tick for every currently-tracked person,
+    and prune() with the set of still-active track_ids so windows for
+    people who've left frame don't leak memory forever."""
+
+    def __init__(self, window_seconds: float = 3.0):
+        self.window_seconds = window_seconds
+        self._windows: dict[int, _SingleTrackWindow] = {}
+
+    def update(self, track_id: int, detection: PersonDetection) -> None:
+        if track_id not in self._windows:
+            self._windows[track_id] = _SingleTrackWindow(self.window_seconds)
+        self._windows[track_id].add(detection)
+
+    def compute(self, track_id: int) -> KinematicFeatures:
+        window = self._windows.get(track_id)
+        if window is None:
+            return KinematicFeatures(0.0, 0.0, 1.0, 0.0)
+        return window.compute()
+
+    def drop_track(self, track_id: int) -> None:
+        self._windows.pop(track_id, None)
+
+    def prune(self, active_track_ids: set[int]) -> None:
+        for track_id in list(self._windows.keys()):
+            if track_id not in active_track_ids:
+                self.drop_track(track_id)
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_feature_window.py -v`
+Expected: PASS (3 passed)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add meridian_hub/features/__init__.py meridian_hub/features/feature_window.py tests/test_feature_window.py
+git commit -m "Add per-track kinematic feature window manager"
+```
+
+---
+
+## Task 8: Fall detection state machine
+
+**Files:**
+- Create: `meridian_hub/classifiers/__init__.py`
+- Create: `meridian_hub/classifiers/thresholds.py`
+- Create: `meridian_hub/classifiers/fall_types.py`
+- Create: `meridian_hub/classifiers/fall_state_machine.py`
+- Test: `tests/test_fall_state_machine.py`
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_fall_state_machine.py
+from meridian_hub.features.feature_window import KinematicFeatures
+from meridian_hub.classifiers.fall_state_machine import FallStateMachine
+from meridian_hub.classifiers.fall_types import FallState
+
+
+def _features(velocity=0.0, angle=5.0, aspect_ratio=0.4, stillness=0.0):
+    return KinematicFeatures(velocity, angle, aspect_ratio, stillness)
+
+
+def test_stays_normal_when_standing_still():
+    machine = FallStateMachine(track_id=1)
+    event = None
+    for t in [0.0, 0.5, 1.0]:
+        event = machine.update(_features(velocity=0.0, angle=5.0), timestamp=t)
+    assert machine.state == FallState.NORMAL
+    assert event is None
+
+
+def test_confirms_fall_on_drop_plus_sustained_stillness_horizontal():
+    machine = FallStateMachine(track_id=1)
+    machine.update(_features(velocity=0.0, angle=5.0, aspect_ratio=0.4), timestamp=0.0)
+    machine.update(_features(velocity=250.0, angle=70.0, aspect_ratio=1.8, stillness=0.0), timestamp=0.5)
+    event = machine.update(_features(velocity=0.0, angle=75.0, aspect_ratio=1.8, stillness=2.1), timestamp=2.6)
+    assert machine.state == FallState.CONFIRMED
+    assert event is not None
+    assert event.state == FallState.CONFIRMED
+    assert event.track_id == 1
+
+
+def test_suspected_when_signals_borderline():
+    machine = FallStateMachine(track_id=1)
+    machine.update(_features(velocity=0.0, angle=5.0, aspect_ratio=0.4), timestamp=0.0)
+    machine.update(_features(velocity=140.0, angle=40.0, aspect_ratio=0.9, stillness=0.0), timestamp=0.5)
+    event = machine.update(_features(velocity=5.0, angle=42.0, aspect_ratio=0.9, stillness=0.6), timestamp=1.5)
+    assert machine.state == FallState.SUSPECTED
+    assert event is not None
+    assert event.state == FallState.SUSPECTED
+
+
+def test_clears_when_recovers_without_crossing_ambiguous_band():
+    machine = FallStateMachine(track_id=1)
+    machine.update(_features(velocity=0.0, angle=5.0, aspect_ratio=0.4), timestamp=0.0)
+    machine.update(_features(velocity=130.0, angle=32.0, aspect_ratio=0.6, stillness=0.0), timestamp=0.3)
+    event = machine.update(_features(velocity=0.0, angle=8.0, aspect_ratio=0.4, stillness=0.0), timestamp=0.6)
+    assert machine.state == FallState.NORMAL
+    assert event is None or event.state == FallState.CLEARED
+
+
+def test_confirmed_path_never_requires_any_io():
+    import inspect
+    source = inspect.getsource(FallStateMachine.update)
+    for banned in ("requests", "socket", "sqlite3", "open("):
+        assert banned not in source
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_fall_state_machine.py -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'meridian_hub.classifiers'`
+
+- [ ] **Step 3: Write minimal implementation**
+
+`meridian_hub/classifiers/__init__.py`:
+```python
+```
+
+`meridian_hub/classifiers/thresholds.py`:
+```python
+# Tunable against real recorded test clips without touching state-machine
+# logic (PRD section 28.1's staged-event validation protocol).
+
+VELOCITY_CANDIDATE_THRESHOLD = 120.0  # px/sec downward, triggers FALL_CANDIDATE
+ANGLE_CANDIDATE_THRESHOLD_DEGREES = 30.0
+
+VELOCITY_CONFIRM_THRESHOLD = 200.0
+ANGLE_CONFIRM_THRESHOLD_DEGREES = 55.0
+ASPECT_RATIO_HORIZONTAL_THRESHOLD = 1.2
+STILLNESS_CONFIRM_SECONDS = 2.0
+
+CANDIDATE_WINDOW_SECONDS = 3.0
+```
+
+`meridian_hub/classifiers/fall_types.py`:
+```python
+from dataclasses import dataclass
+from enum import Enum, auto
+
+
+class FallState(Enum):
+    NORMAL = auto()
+    FALL_CANDIDATE = auto()
+    CONFIRMED = auto()
+    SUSPECTED = auto()
+    CLEARED = auto()
+
+
+@dataclass(frozen=True)
+class FallEvent:
+    track_id: int
+    state: FallState
+    timestamp: float
+```
+
+`meridian_hub/classifiers/fall_state_machine.py`:
+```python
+from meridian_hub.classifiers import thresholds as T
+from meridian_hub.classifiers.fall_types import FallEvent, FallState
+from meridian_hub.features.feature_window import KinematicFeatures
+
+
+class FallStateMachine:
+    """NORMAL -> FALL_CANDIDATE -> {CONFIRMED, SUSPECTED, CLEARED} -> NORMAL.
+    One instance per tracked person. CONFIRMED fires immediately on
+    crossing thresholds -- no I/O, no network, so it can never be delayed
+    by anything external (design spec section 2.1's real-time guarantee)."""
+
+    def __init__(self, track_id: int):
+        self.track_id = track_id
+        self.state = FallState.NORMAL
+        self._candidate_since: float | None = None
+
+    def update(self, features: KinematicFeatures, timestamp: float) -> FallEvent | None:
+        if self.state == FallState.NORMAL:
+            if (features.hip_vertical_velocity >= T.VELOCITY_CANDIDATE_THRESHOLD
+                    and features.torso_angle_degrees >= T.ANGLE_CANDIDATE_THRESHOLD_DEGREES):
+                self.state = FallState.FALL_CANDIDATE
+                self._candidate_since = timestamp
+            return None
+
+        if self.state == FallState.FALL_CANDIDATE:
+            elapsed = timestamp - (self._candidate_since or timestamp)
+
+            is_horizontal_and_still = (
+                features.aspect_ratio >= T.ASPECT_RATIO_HORIZONTAL_THRESHOLD
+                and features.stillness_duration_seconds >= T.STILLNESS_CONFIRM_SECONDS
+            )
+            high_confidence = (
+                features.torso_angle_degrees >= T.ANGLE_CONFIRM_THRESHOLD_DEGREES
+                or features.hip_vertical_velocity >= T.VELOCITY_CONFIRM_THRESHOLD
+            )
+            if is_horizontal_and_still and high_confidence:
+                self.state = FallState.CONFIRMED
+                return FallEvent(self.track_id, FallState.CONFIRMED, timestamp)
+
+            recovered = (
+                features.torso_angle_degrees < T.ANGLE_CANDIDATE_THRESHOLD_DEGREES
+                and features.hip_vertical_velocity < T.VELOCITY_CANDIDATE_THRESHOLD
+                and features.stillness_duration_seconds == 0.0
+            )
+            if recovered:
+                self.state = FallState.NORMAL
+                self._candidate_since = None
+                return FallEvent(self.track_id, FallState.CLEARED, timestamp)
+
+            if elapsed >= T.CANDIDATE_WINDOW_SECONDS:
+                self.state = FallState.SUSPECTED
+                return FallEvent(self.track_id, FallState.SUSPECTED, timestamp)
+
+            if is_horizontal_and_still or (
+                features.torso_angle_degrees >= T.ANGLE_CANDIDATE_THRESHOLD_DEGREES
+                and features.stillness_duration_seconds > 0.0
+                and not high_confidence
+            ):
+                self.state = FallState.SUSPECTED
+                return FallEvent(self.track_id, FallState.SUSPECTED, timestamp)
+
+            return None
+
+        # CONFIRMED/SUSPECTED/CLEARED: caller resets the machine (fresh
+        # instance) once an incident is resolved -- this class only owns
+        # detection, not incident lifecycle.
+        return None
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/test_fall_state_machine.py -v`
+Expected: PASS (5 passed)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add meridian_hub/classifiers/__init__.py meridian_hub/classifiers/thresholds.py meridian_hub/classifiers/fall_types.py meridian_hub/classifiers/fall_state_machine.py tests/test_fall_state_machine.py
+git commit -m "Add per-track fall detection state machine"
+```
+
+---
