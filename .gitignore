@@ -45,3 +45,6 @@ Thumbs.db
 # Local agent/app state
 .agents/
 .codex/
+
+# Python build artifacts
+*.egg-info/
