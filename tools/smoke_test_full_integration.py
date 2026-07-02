@@ -2,14 +2,15 @@
 the entire chain wired together the way the live Hub would run it.
 
 Chain 1 (visitor): real video frame -> InsightFace detect+embed+age/gender
-  -> quality gate -> encrypt embedding AND face crop -> build the exact
+  -> quality gate -> optional Hack Club AI body/clothing description
+  -> encrypt embedding, face crop, and person photo -> build the exact
   Supabase visitor-observation payload -> prove it round-trips and leaks
   no plaintext -> generate the caregiver-facing person description.
 
 Chain 2 (fall -> alert): synthetic fall sequence -> HubDaemon full
   pipeline (pose->track->features->state machine->validator->event) ->
-  canonical PRD event -> resident-first alert copy -> SMS dispatch
-  (dry-run unless --send).
+  canonical PRD event -> resident-first alert copy -> app-notification
+  delivery to the backend ingest endpoint (which fans out app push).
 
 This is the "is EVERYTHING actually working together" check, not a unit
 test -- it uses the real model files, real AES-GCM, real pydantic
@@ -25,6 +26,7 @@ import numpy as np
 from meridian_hub.alerting.alert_formatter import format_alert_message
 from meridian_hub.capture.camera_registry import CameraRecord, CameraRegistry
 from meridian_hub.events.event_engine import EventEngine
+from meridian_hub.face.body_description import HackClubVisionDescriber
 from meridian_hub.face.embedding_encryption import EmbeddingEncryptor
 from meridian_hub.face.detector import select_best_detection, score_detection
 from meridian_hub.face.person_description import describe_person
@@ -89,20 +91,49 @@ def chain1_visitor(face_video):
     crop = best_frame[max(y1, 0):y2, max(x1, 0):x2]
     ok, jpeg = cv2.imencode(".jpg", crop)
     enc_image = encryptor.encrypt_image(jpeg.tobytes())
+    ok, person_jpeg = cv2.imencode(".jpg", best_frame)
+    if not check("full-frame person photo encoded as jpeg", ok):
+        return
+    person_photo_bytes = person_jpeg.tobytes()
+    enc_person_photo = encryptor.encrypt_image(person_photo_bytes)
+
+    body_description = None
+    body_description_model = None
+    body_description_generated_at = None
+    if os.environ.get("HACKCLUB_AI_API_KEY"):
+        body_result = HackClubVisionDescriber.from_settings().describe_person_photo(person_photo_bytes)
+        body_description = body_result.description
+        body_description_model = body_result.model
+        body_description_generated_at = body_result.generated_at
+        print(f"      Hack Club body description: \"{body_description}\"")
+        check("Hack Club vision generated a body/clothing description", bool(body_description))
+    else:
+        print("      (Hack Club vision skipped -- HACKCLUB_AI_API_KEY is not set)")
 
     check("embedding round-trips through decrypt", encryptor.decrypt(enc_embedding) == best_detection.embedding)
     check("face image round-trips through decrypt", encryptor.decrypt_image(enc_image) == jpeg.tobytes())
+    check(
+        "person photo round-trips through decrypt",
+        encryptor.decrypt_image(enc_person_photo) == person_photo_bytes,
+    )
 
     obs = build_visitor_observation(
         facility_id="fac-poc-001", camera_id="cam-entry-1", source_event_id="evt-visitor-001",
         detected_at=datetime.now(timezone.utc), match_status="unknown",
         quality_score=score_detection(best_frame, best_detection).sharpness,
         match_confidence=match.similarity, encrypted=enc_embedding, encrypted_image=enc_image,
+        body_description=body_description,
+        body_description_model=body_description_model,
+        body_description_generated_at=body_description_generated_at,
+        encrypted_person_photo=enc_person_photo,
     )
     payload = obs.model_dump(mode="json")
     serialized = str(payload)
     check("payload has encrypted embedding ciphertext", bool(payload["face_embedding_ciphertext"]))
     check("payload has encrypted face image ciphertext", bool(payload["face_image_ciphertext"]))
+    check("payload has encrypted person photo ciphertext", bool(payload["person_photo_ciphertext"]))
+    if body_description is not None:
+        check("payload includes Hack Club body description", payload["body_description"] == body_description)
     # prove no raw embedding float leaked into the outgoing payload
     leaked = any(f"{v:.5f}" in serialized for v in best_detection.embedding[:20])
     check("NO plaintext embedding values in the outgoing payload", not leaked)
@@ -145,15 +176,16 @@ class _ScriptedEstimator:
 
 
 def chain2_fall_to_alert(send, to_number):
-    print("\n=== CHAIN 2: fall detected -> event -> alert copy -> SMS ===")
+    print("\n=== CHAIN 2: fall detected -> event -> alert copy -> app notification delivery ===")
     registry = CameraRegistry(db_path=":memory:")
     registry.register(CameraRecord(
         camera_id="cam-1", facility_id="fac-1", building_id="bld-1", floor_id="flr-1",
         room_id="room-12", resident_id="res-maggie", source="0", privacy_state="active",
     ))
+    queue = QueueStore(db_path=":memory:")
     daemon = HubDaemon(
         pose_estimator=_ScriptedEstimator([_standing(0.0), _fallen(0.5), _fallen(2.6)]),
-        event_engine=EventEngine(), queue_store=QueueStore(db_path=":memory:"),
+        event_engine=EventEngine(), queue_store=queue,
         camera_registry=registry,
     )
     frame = np.zeros((10, 10, 3), dtype=np.uint8)
@@ -170,28 +202,32 @@ def chain2_fall_to_alert(send, to_number):
     print(f"      caregiver alert copy: \"{message}\"")
     check("alert copy is resident-first (no event ID jargon)", "evt" not in message and "Maggie" in message)
 
-    if send and to_number:
-        from meridian_hub.alerting.sms_dispatcher import SmsAlertDispatcher
-        dispatcher = SmsAlertDispatcher.from_env()
-        # Trial accounts require a predefined template name as the body.
-        sms_results = dispatcher.send_alert([to_number], "sms_appointment_reminders")
-        for r in sms_results:
-            print(f"      SMS to {r.to}: success={r.success} sid={r.message_sid} error={r.error}")
-        check("SMS actually sent via Twilio", all(r.success for r in sms_results))
-    else:
-        print("      (SMS dry-run -- pass --send --to +1XXXXXXXXXX to actually send)")
+    # App-notification delivery: the Hub hands the event to the backend
+    # ingest endpoint (which fans out app push via notify-family). Prove
+    # the queued event is delivered end-to-end against a fake backend that
+    # captures exactly what the real ingest-event endpoint would receive.
+    from meridian_hub.alerting.notification_dispatcher import HttpResponse, NotificationDispatcher
+    captured = []
+
+    def fake_backend(url, body, headers):
+        captured.append(body)
+        return HttpResponse(status_code=200, text="accepted")
+
+    dispatcher = NotificationDispatcher(queue, "https://backend/ingest-event", post_fn=fake_backend)
+    delivery = dispatcher.dispatch_pending(now=0.0)
+    check("the alert event was delivered to the backend for app push", any(d.delivered for d in delivery))
+    check("delivered payload carries the fall_confirmed event", any(c.get("event_type") == "fall_confirmed" for c in captured))
+    check("queue is drained after successful delivery (offline-first ack)", queue.pending(now=0.0) == [])
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--face-video", default="tests/fixtures/videos/head-pose-face-detection-female.mp4")
-    parser.add_argument("--send", action="store_true")
-    parser.add_argument("--to", default=None)
     args = parser.parse_args()
 
     _load_env()
     chain1_visitor(args.face_video)
-    chain2_fall_to_alert(args.send, args.to)
+    chain2_fall_to_alert()
 
     passed = sum(1 for _, c in results if c)
     print(f"\n=== {passed}/{len(results)} end-to-end checks passed ===")

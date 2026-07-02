@@ -40,6 +40,7 @@
 - `meridian_hub/face/detector.py`: quality gate picks the one clean snapshot worth acting on.
 - `meridian_hub/face/visitor_store.py`: local SQLite match against known residents/staff/visitors.
 - `meridian_hub/face/embedding_encryption.py`: AES-256-GCM encryption; key stays on the Hub/facility-controlled side.
+- `meridian_hub/face/body_description.py`: optional Hack Club AI vision call (`HACKCLUB_AI_API_KEY`) that creates one caregiver-facing full-body/clothing description before photo encryption.
 - `meridian_hub/face/visitor_observation.py`: builds the encrypted visitor observation payload.
 
 On no match (`match_status: "new_visitor"` or `"unknown"`), the Hub should encrypt the embedding before it leaves the device and send an encrypted visitor-face observation to `ingest-visitor-face` with:
@@ -58,7 +59,9 @@ On no match (`match_status: "new_visitor"` or `"unknown"`), the Hub should encry
 - `face_embedding_model`
 - `face_embedding_dimensions`
 - optional encrypted face image metadata
+- optional Hack Club AI `body_description` + model/timestamp
+- optional encrypted full-body/person photo fields under `person_photo_*`
 
-Plaintext embeddings, plaintext face crops, raw images, video, and base64 media must never be sent to Supabase.
+Plaintext embeddings, plaintext face crops, plaintext full-body/person photos, raw images, video, and base64 media must never be sent to Supabase.
 
 Report questions in chat; canonical event schema for everything else is `meridian_hub/events/schemas.py` (PRD section 17).

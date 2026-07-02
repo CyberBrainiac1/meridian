@@ -13,9 +13,9 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "requests>=2.32",
+    "truststore>=0.10; platform_system == 'Windows'",
     "psutil>=6.0",
     "cryptography>=42.0",
-    "twilio>=9.0",
 ]
 
 [project.optional-dependencies]

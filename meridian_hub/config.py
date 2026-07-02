@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     supabase_secret_key: str | None = None
     supabase_service_role_key: str | None = None
     meridian_supabase_service_role_key: str | None = None
+    hackclub_ai_api_key: str | None = None
+    hackclub_ai_base_url: str = "https://ai.hackclub.com/proxy/v1"
+    hackclub_ai_vision_model: str = "google/gemini-2.5-flash"
+    hackclub_ai_timeout_seconds: float = 45.0
 
     @field_validator("camera_sources", mode="before")
     @classmethod

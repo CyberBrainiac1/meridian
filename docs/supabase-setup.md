@@ -125,6 +125,16 @@ This is not an enrollment endpoint. It records that a visitor/new person was obs
     "bottom": 226,
     "left": 81
   },
+  "body_description": "wearing a red jacket, dark pants, and carrying a black backpack",
+  "body_description_model": "google/gemini-2.5-flash",
+  "body_description_generated_at": "2026-07-02T21:00:01Z",
+  "person_photo_ciphertext": "base64 encrypted full-body/person photo",
+  "person_photo_sha256": "64 lowercase hex chars",
+  "person_photo_key_id": "facility-kms-key-id",
+  "person_photo_nonce": "base64url nonce",
+  "person_photo_algorithm": "AES-256-GCM",
+  "person_photo_content_type": "image/jpeg",
+  "person_photo_size_bytes": 88431,
   "metadata": {
     "entry_zone": "main-entrance"
   }
@@ -133,4 +143,6 @@ This is not an enrollment endpoint. It records that a visitor/new person was obs
 
 If an opt-in encrypted face image is uploaded, use the `visitor-face-evidence` bucket and include `encrypted_face_image_path`, `face_image_sha256`, `face_image_key_id`, `face_image_nonce`, and `face_image_algorithm`. Do not upload plaintext visitor snapshots.
 
-Do not send `face_encoding`, `encoding`, `embedding`, `face_embedding`, `face_image`, `face_crop`, raw image fields, base64 media, or plaintext snapshots to the function.
+When Hack Club AI body description is enabled on the Hub, send `body_description`, `body_description_model`, and `body_description_generated_at` with the observation. The full-body/person photo must be encrypted before upload and sent through `person_photo_*`; never send a plaintext `person_photo`, `body_photo`, raw image field, or base64 media field.
+
+Do not send `face_encoding`, `encoding`, `embedding`, `face_embedding`, `face_image`, `face_crop`, raw image fields, base64 media, plaintext full-body photos, or plaintext snapshots to the function.

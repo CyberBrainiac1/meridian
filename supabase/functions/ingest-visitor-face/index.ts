@@ -27,6 +27,12 @@ const forbiddenPlaintextFields = [
   "embedding",
   "face_embedding",
   "embedding_vector",
+  "person_photo",
+  "person_image",
+  "body_photo",
+  "body_image",
+  "full_body_photo",
+  "full_body_image",
 ];
 
 type VisitorFacePayload = Record<string, unknown>;
@@ -105,6 +111,17 @@ Deno.serve(async (request) => {
     face_image_nonce: payload.face_image_nonce ?? null,
     face_image_algorithm: payload.face_image_algorithm ?? null,
     face_image_expires_at: payload.face_image_expires_at ?? null,
+    body_description: payload.body_description ?? null,
+    body_description_model: payload.body_description_model ?? null,
+    body_description_generated_at: payload.body_description_generated_at ?? null,
+    person_photo_ciphertext: payload.person_photo_ciphertext ?? null,
+    person_photo_sha256: payload.person_photo_sha256 ?? null,
+    person_photo_key_id: payload.person_photo_key_id ?? null,
+    person_photo_nonce: payload.person_photo_nonce ?? null,
+    person_photo_algorithm: payload.person_photo_algorithm ?? null,
+    person_photo_content_type: payload.person_photo_content_type ?? null,
+    person_photo_size_bytes: payload.person_photo_size_bytes ?? null,
+    person_photo_expires_at: payload.person_photo_expires_at ?? null,
     metadata: {
       ...(isPlainObject(payload.metadata) ? payload.metadata : {}),
       ingest_actor_user_id: actorUserId,
@@ -259,6 +276,30 @@ function validatePayload(payload: VisitorFacePayload): { ok: true } | { ok: fals
     return { ok: false, error: "metadata_invalid" };
   }
 
+  const bodyDescription = valueAsString(payload.body_description);
+  if (payload.body_description !== undefined && payload.body_description !== null) {
+    if (!bodyDescription || bodyDescription.length > 700) {
+      return { ok: false, error: "body_description_invalid" };
+    }
+  }
+
+  if (payload.body_description_model !== undefined && payload.body_description_model !== null) {
+    const model = valueAsString(payload.body_description_model);
+    if (!model || model.length > 120) {
+      return { ok: false, error: "body_description_model_invalid" };
+    }
+  }
+
+  if (
+    payload.body_description_generated_at !== undefined &&
+    payload.body_description_generated_at !== null
+  ) {
+    const generatedAt = valueAsString(payload.body_description_generated_at);
+    if (!generatedAt || Number.isNaN(Date.parse(generatedAt))) {
+      return { ok: false, error: "body_description_generated_at_invalid" };
+    }
+  }
+
   const faceImagePath = valueAsString(payload.encrypted_face_image_path);
   if (!faceImagePath) {
     return { ok: true };
@@ -293,6 +334,58 @@ function validatePayload(payload: VisitorFacePayload): { ok: true } | { ok: fals
     const expiresAt = valueAsString(payload.face_image_expires_at);
     if (!expiresAt || Number.isNaN(Date.parse(expiresAt))) {
       return { ok: false, error: "face_image_expires_at_invalid" };
+    }
+  }
+
+  const personPhotoCiphertext = valueAsString(payload.person_photo_ciphertext);
+  if (!personPhotoCiphertext) {
+    return { ok: true };
+  }
+
+  if (personPhotoCiphertext.length < 32) {
+    return { ok: false, error: "person_photo_ciphertext_invalid" };
+  }
+
+  const personPhotoSha256 = valueAsString(payload.person_photo_sha256);
+  if (!personPhotoSha256 || !/^[a-f0-9]{64}$/.test(personPhotoSha256)) {
+    return { ok: false, error: "person_photo_sha256_invalid" };
+  }
+
+  if (!valueAsString(payload.person_photo_key_id)) {
+    return { ok: false, error: "person_photo_key_id_required" };
+  }
+
+  if (!valueAsString(payload.person_photo_nonce)) {
+    return { ok: false, error: "person_photo_nonce_required" };
+  }
+
+  const personPhotoAlgorithm = valueAsString(payload.person_photo_algorithm);
+  if (!personPhotoAlgorithm || !cryptoAlgorithms.has(personPhotoAlgorithm)) {
+    return { ok: false, error: "person_photo_algorithm_invalid" };
+  }
+
+  const personPhotoContentType = valueAsString(payload.person_photo_content_type);
+  if (
+    !personPhotoContentType ||
+    !["image/jpeg", "image/png", "image/webp"].includes(personPhotoContentType)
+  ) {
+    return { ok: false, error: "person_photo_content_type_invalid" };
+  }
+
+  const personPhotoSizeBytes = payload.person_photo_size_bytes;
+  if (
+    typeof personPhotoSizeBytes !== "number" ||
+    !Number.isInteger(personPhotoSizeBytes) ||
+    personPhotoSizeBytes <= 0 ||
+    personPhotoSizeBytes > 10_485_760
+  ) {
+    return { ok: false, error: "person_photo_size_bytes_invalid" };
+  }
+
+  if (payload.person_photo_expires_at !== undefined && payload.person_photo_expires_at !== null) {
+    const expiresAt = valueAsString(payload.person_photo_expires_at);
+    if (!expiresAt || Number.isNaN(Date.parse(expiresAt))) {
+      return { ok: false, error: "person_photo_expires_at_invalid" };
     }
   }
 

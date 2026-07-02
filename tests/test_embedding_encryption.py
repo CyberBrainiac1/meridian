@@ -115,3 +115,13 @@ def test_image_digest_matches_sha256_of_plaintext_bytes():
     image_bytes = b"some-jpeg-bytes"
     encrypted = encryptor.encrypt_image(image_bytes)
     assert encrypted.digest == hashlib.sha256(image_bytes).hexdigest()
+
+
+def test_image_helper_can_encrypt_full_body_photo_bytes():
+    encryptor = _encryptor()
+    body_photo = b"full-body-person-photo-bytes"
+    encrypted = encryptor.encrypt_image(body_photo, content_type="image/jpeg")
+
+    assert encrypted.content_type == "image/jpeg"
+    assert encrypted.size_bytes == len(body_photo)
+    assert encryptor.decrypt_image(encrypted) == body_photo

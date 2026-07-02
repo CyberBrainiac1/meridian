@@ -103,6 +103,19 @@ export interface FamilyVisitorRow {
     quality_score: number | null;
 }
 
+/** UI-safe projection for care-team visitor review screens. */
+export interface VisitorObservationTimelineRow {
+    facility_id: string;
+    camera_id: string | null;
+    match_status: VisitorMatchStatus;
+    detected_at: string;
+    quality_score: number | null;
+    matched_person_id: string | null;
+    body_description: string | null;
+    body_description_model: string | null;
+    body_description_generated_at: string | null;
+}
+
 /** public.notifications — audit trail of what a family was told and when. */
 export interface NotificationRow {
     id: string;

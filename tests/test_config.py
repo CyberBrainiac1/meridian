@@ -39,3 +39,17 @@ def test_supabase_settings_load_from_env(monkeypatch):
     assert settings.supabase_secret_key == "sb_secret_test"
     assert settings.supabase_service_role_key == "server-only"
     assert settings.meridian_supabase_service_role_key == "server-only-meridian"
+
+
+def test_hackclub_ai_settings_load_from_env(monkeypatch):
+    monkeypatch.setenv("HACKCLUB_AI_API_KEY", "sk-hc-v1-test")
+    monkeypatch.setenv("HACKCLUB_AI_BASE_URL", "https://ai.hackclub.com/proxy/v1")
+    monkeypatch.setenv("HACKCLUB_AI_VISION_MODEL", "google/gemini-2.5-flash")
+    monkeypatch.setenv("HACKCLUB_AI_TIMEOUT_SECONDS", "12.5")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.hackclub_ai_api_key == "sk-hc-v1-test"
+    assert settings.hackclub_ai_base_url == "https://ai.hackclub.com/proxy/v1"
+    assert settings.hackclub_ai_vision_model == "google/gemini-2.5-flash"
+    assert settings.hackclub_ai_timeout_seconds == 12.5
