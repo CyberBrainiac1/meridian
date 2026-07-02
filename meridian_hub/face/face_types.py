@@ -15,3 +15,5 @@ class FaceDetection:
     landmarks: list[Point]  # 5 points: left_eye, right_eye, nose, mouth_left, mouth_right
     embedding: list[float]  # 512-d ArcFace embedding
     det_score: float
+    estimated_age: int | None = None  # from InsightFace's bundled genderage model
+    estimated_gender: str | None = None  # "male" | "female" -- always an estimate, never identity

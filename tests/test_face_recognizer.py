@@ -4,11 +4,15 @@ from meridian_hub.face.recognizer import FaceRecognizer
 
 
 class _FakeFace:
-    def __init__(self, bbox, kps, embedding, det_score):
+    def __init__(self, bbox, kps, embedding, det_score, age=None, gender=None):
         self.bbox = np.array(bbox)
         self.kps = np.array(kps)
         self.normed_embedding = np.array(embedding)
         self.det_score = det_score
+        if age is not None:
+            self.age = age
+        if gender is not None:
+            self.gender = gender
 
 
 class _FakeApp:
@@ -47,6 +51,30 @@ def test_converts_insightface_faces_to_face_detections():
     assert len(d.landmarks) == 5
     assert len(d.embedding) == 512
     assert d.det_score == 0.95
+
+
+def test_converts_age_and_gender_when_present():
+    faces = [_FakeFace(
+        bbox=[10.0, 20.0, 110.0, 120.0],
+        kps=[[40, 50], [80, 50], [60, 70], [45, 90], [75, 90]],
+        embedding=[0.1] * 512, det_score=0.95, age=52, gender=1,
+    )]
+    recognizer = FaceRecognizer(app_factory=_fake_factory(faces))
+    detections = recognizer.detect_and_embed(np.zeros((200, 200, 3), dtype=np.uint8))
+    assert detections[0].estimated_age == 52
+    assert detections[0].estimated_gender == "male"
+
+
+def test_age_and_gender_none_when_absent():
+    faces = [_FakeFace(
+        bbox=[10.0, 20.0, 110.0, 120.0],
+        kps=[[40, 50], [80, 50], [60, 70], [45, 90], [75, 90]],
+        embedding=[0.1] * 512, det_score=0.95,
+    )]
+    recognizer = FaceRecognizer(app_factory=_fake_factory(faces))
+    detections = recognizer.detect_and_embed(np.zeros((200, 200, 3), dtype=np.uint8))
+    assert detections[0].estimated_age is None
+    assert detections[0].estimated_gender is None
 
 
 def test_no_faces_returns_empty_list():

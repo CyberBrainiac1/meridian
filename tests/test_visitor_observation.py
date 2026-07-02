@@ -58,3 +58,36 @@ def test_observation_contract_fields_match_codex_ingest_endpoint():
         "face_embedding_dimensions",
     ]:
         assert field in payload
+
+
+def test_image_is_optional_and_absent_by_default():
+    encryptor = EmbeddingEncryptor(key=os.urandom(32), key_id="key-1")
+    encrypted = encryptor.encrypt([0.1])
+    observation = build_visitor_observation(
+        facility_id="fac-1", camera_id="cam-1", source_event_id="evt-1",
+        detected_at=datetime(2026, 7, 2, 14, 0, 0, tzinfo=timezone.utc),
+        match_status="unknown", quality_score=0.5, match_confidence=None,
+        encrypted=encrypted,
+    )
+    assert observation.face_image_ciphertext is None
+
+
+def test_encrypted_image_included_when_provided_never_carries_plaintext():
+    encryptor = EmbeddingEncryptor(key=os.urandom(32), key_id="key-1")
+    encrypted_embedding = encryptor.encrypt([0.1])
+    fake_jpeg = b"\xff\xd8\xff\xe0-recognizable-marker-bytes-\xff\xd9"
+    encrypted_image = encryptor.encrypt_image(fake_jpeg)
+
+    observation = build_visitor_observation(
+        facility_id="fac-1", camera_id="cam-entry-1", source_event_id="evt-with-photo",
+        detected_at=datetime(2026, 7, 2, 14, 0, 0, tzinfo=timezone.utc),
+        match_status="unknown", quality_score=0.9, match_confidence=None,
+        encrypted=encrypted_embedding, encrypted_image=encrypted_image,
+    )
+
+    payload = observation.model_dump(mode="json")
+    assert payload["face_image_ciphertext"] == encrypted_image.ciphertext
+    assert payload["face_image_digest"] == encrypted_image.digest
+    assert payload["face_image_content_type"] == "image/jpeg"
+    assert payload["face_image_size_bytes"] == len(fake_jpeg)
+    assert b"recognizable-marker-bytes" not in str(payload).encode("utf-8", errors="ignore")

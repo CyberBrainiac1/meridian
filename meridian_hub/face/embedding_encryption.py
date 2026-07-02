@@ -11,22 +11,49 @@ NONCE_SIZE_BYTES = 12
 
 
 @dataclass(frozen=True)
-class EncryptedEmbedding:
+class EncryptedBlob:
     ciphertext: str  # base64
-    digest: str  # sha256 hex of the plaintext embedding, for dedup/integrity checks without decrypting
+    digest: str  # sha256 hex of the plaintext bytes, for dedup/integrity checks without decrypting
     key_id: str
     nonce: str  # base64
+    algorithm: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
+class EncryptedEmbedding:
+    ciphertext: str
+    digest: str
+    key_id: str
+    nonce: str
     algorithm: str
     dimensions: int
 
 
+@dataclass(frozen=True)
+class EncryptedImage:
+    ciphertext: str
+    digest: str
+    key_id: str
+    nonce: str
+    algorithm: str
+    content_type: str
+    size_bytes: int
+
+
 class EmbeddingEncryptor:
-    """Encrypts a face embedding on the Hub before it ever leaves the
-    device -- Codex's ingest-unknown-person Supabase endpoint rejects
-    plaintext embeddings outright. The AES key never leaves the Hub;
-    Supabase only ever receives ciphertext plus enough metadata (nonce,
-    algorithm, key_id, digest) to be decrypted later by something that
-    holds the key, which is never Supabase itself."""
+    """Encrypts visitor face data on the Hub before any of it leaves the
+    device -- Codex's Supabase ingest endpoint rejects plaintext
+    embeddings and plaintext images outright. The AES key never leaves
+    the Hub; Supabase only ever receives ciphertext plus enough metadata
+    (nonce, algorithm, key_id, digest) to be decrypted later by something
+    that holds the key, which is never Supabase itself.
+
+    Handles both the face embedding (a float vector) and the quality-
+    gated face crop/snapshot (raw image bytes) -- same AES-256-GCM
+    primitive underneath, since a face image sent for a caregiver/admin
+    to later attach a name to is exactly as sensitive as the embedding
+    used to match it."""
 
     def __init__(self, key: bytes, key_id: str):
         if len(key) != 32:
@@ -46,24 +73,45 @@ class EmbeddingEncryptor:
         key_id = os.environ.get(key_id_env_var, "hub-default")
         return cls(key=key, key_id=key_id)
 
-    def encrypt(self, embedding: list[float]) -> EncryptedEmbedding:
-        plaintext = json.dumps(embedding).encode("utf-8")
+    def _encrypt_bytes(self, plaintext: bytes) -> EncryptedBlob:
         digest = hashlib.sha256(plaintext).hexdigest()
         nonce = os.urandom(NONCE_SIZE_BYTES)
         ciphertext = self._aesgcm.encrypt(nonce, plaintext, associated_data=None)
-        return EncryptedEmbedding(
+        return EncryptedBlob(
             ciphertext=base64.b64encode(ciphertext).decode("ascii"),
             digest=digest,
             key_id=self._key_id,
             nonce=base64.b64encode(nonce).decode("ascii"),
             algorithm=ALGORITHM,
-            dimensions=len(embedding),
+            size_bytes=len(plaintext),
+        )
+
+    def _decrypt_bytes(self, ciphertext_b64: str, nonce_b64: str) -> bytes:
+        nonce = base64.b64decode(nonce_b64)
+        ciphertext = base64.b64decode(ciphertext_b64)
+        return self._aesgcm.decrypt(nonce, ciphertext, associated_data=None)
+
+    def encrypt(self, embedding: list[float]) -> EncryptedEmbedding:
+        blob = self._encrypt_bytes(json.dumps(embedding).encode("utf-8"))
+        return EncryptedEmbedding(
+            ciphertext=blob.ciphertext, digest=blob.digest, key_id=blob.key_id,
+            nonce=blob.nonce, algorithm=blob.algorithm, dimensions=len(embedding),
         )
 
     def decrypt(self, encrypted: EncryptedEmbedding) -> list[float]:
         """Local-only utility (e.g. for tests or Hub-side debugging) --
         Supabase never calls this, it doesn't hold the key."""
-        nonce = base64.b64decode(encrypted.nonce)
-        ciphertext = base64.b64decode(encrypted.ciphertext)
-        plaintext = self._aesgcm.decrypt(nonce, ciphertext, associated_data=None)
+        plaintext = self._decrypt_bytes(encrypted.ciphertext, encrypted.nonce)
         return json.loads(plaintext.decode("utf-8"))
+
+    def encrypt_image(self, image_bytes: bytes, content_type: str = "image/jpeg") -> EncryptedImage:
+        blob = self._encrypt_bytes(image_bytes)
+        return EncryptedImage(
+            ciphertext=blob.ciphertext, digest=blob.digest, key_id=blob.key_id,
+            nonce=blob.nonce, algorithm=blob.algorithm, content_type=content_type,
+            size_bytes=blob.size_bytes,
+        )
+
+    def decrypt_image(self, encrypted: EncryptedImage) -> bytes:
+        """Local-only utility, same caveat as decrypt()."""
+        return self._decrypt_bytes(encrypted.ciphertext, encrypted.nonce)

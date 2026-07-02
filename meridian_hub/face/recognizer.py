@@ -75,8 +75,18 @@ class FaceRecognizer:
             x1, y1, x2, y2 = face.bbox
             landmarks = [(float(p[0]), float(p[1])) for p in face.kps]
             embedding = face.normed_embedding.tolist()
+            # buffalo_s bundles a genderage model (see the "find model"
+            # log line at startup) -- InsightFace's convention is
+            # gender=0 female, gender=1 male. These are population-level
+            # estimates for a human-readable description, never treated
+            # as identity or a medical/demographic claim.
+            age = getattr(face, "age", None)
+            gender_raw = getattr(face, "gender", None)
+            gender = {0: "female", 1: "male"}.get(gender_raw)
             results.append(FaceDetection(
                 bbox=(float(x1), float(y1), float(x2), float(y2)),
                 landmarks=landmarks, embedding=embedding, det_score=float(face.det_score),
+                estimated_age=int(age) if age is not None else None,
+                estimated_gender=gender,
             ))
         return results
