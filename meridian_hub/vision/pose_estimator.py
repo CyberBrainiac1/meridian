@@ -4,6 +4,7 @@ from collections.abc import Callable
 import numpy as np
 import onnxruntime as ort
 
+from meridian_hub.vision.fast_ops import greedy_nms
 from meridian_hub.vision.pose_types import Keypoint, PersonDetection
 
 logger = logging.getLogger(__name__)
@@ -26,28 +27,37 @@ def decode_yolo_pose_output(
     per of N anchor predictions. Returns one PersonDetection per distinct
     person after confidence filtering and greedy NMS (so two overlapping
     detections of the same person collapse to the higher-confidence one,
-    while two genuinely different people both survive)."""
+    while two genuinely different people both survive).
+
+    Confidence filtering and NMS both run as vectorized numpy ops
+    (meridian_hub.vision.fast_ops) against raw arrays -- N is typically
+    in the tens to low hundreds per frame (anchor count, not person
+    count), so doing this as array broadcasting instead of a per-row
+    Python loop matters once you're decoding every frame, every camera."""
     if raw_output.ndim == 3:
         raw_output = raw_output[0]
     predictions = raw_output.T  # (N, 56)
 
-    candidates: list[PersonDetection] = []
-    for row in predictions:
-        conf = float(row[4])
-        if conf < conf_threshold:
-            continue
-        cx, cy, w, h = row[0:4]
-        bbox = (float(cx - w / 2), float(cy - h / 2), float(cx + w / 2), float(cy + h / 2))
+    scores = predictions[:, 4]
+    mask = scores >= conf_threshold
+    filtered = predictions[mask]
+    if filtered.shape[0] == 0:
+        return []
+
+    cx, cy, w, h = filtered[:, 0], filtered[:, 1], filtered[:, 2], filtered[:, 3]
+    boxes = np.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], axis=1)
+    conf_filtered = filtered[:, 4]
+
+    keep_indices = greedy_nms(boxes, conf_filtered, nms_iou_threshold)
+
+    results: list[PersonDetection] = []
+    for idx in keep_indices:
+        row = filtered[idx]
+        bbox = tuple(float(v) for v in boxes[idx])
         kpt_data = row[5:5 + NUM_KEYPOINTS * 3].reshape(NUM_KEYPOINTS, 3)
         keypoints = [Keypoint(x=float(x), y=float(y), confidence=float(v)) for x, y, v in kpt_data]
-        candidates.append(PersonDetection(keypoints=keypoints, bbox=bbox, confidence=conf, timestamp=timestamp))
-
-    candidates.sort(key=lambda d: d.confidence, reverse=True)
-    kept: list[PersonDetection] = []
-    for candidate in candidates:
-        if all(candidate.iou(other) < nms_iou_threshold for other in kept):
-            kept.append(candidate)
-    return kept
+        results.append(PersonDetection(keypoints=keypoints, bbox=bbox, confidence=float(row[4]), timestamp=timestamp))
+    return results
 
 
 class PoseEstimator:

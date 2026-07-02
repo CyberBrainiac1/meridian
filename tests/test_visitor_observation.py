@@ -19,9 +19,10 @@ def test_build_observation_never_carries_plaintext_embedding():
 
     payload = observation.model_dump(mode="json")
     assert payload["face_embedding_ciphertext"] == encrypted.ciphertext
-    assert payload["digest"] == encrypted.digest
-    assert payload["key_id"] == "key-1"
-    assert payload["dimensions"] == 3
+    assert payload["face_embedding_digest"] == encrypted.digest
+    assert payload["face_embedding_key_id"] == "key-1"
+    assert payload["face_embedding_dimensions"] == 3
+    assert payload["face_embedding_model"] == "buffalo_s/arcface"
     serialized = str(payload)
     assert "0.111" not in serialized
     assert "0.222" not in serialized
@@ -52,6 +53,8 @@ def test_observation_contract_fields_match_codex_ingest_endpoint():
     payload = observation.model_dump(mode="json")
     for field in [
         "facility_id", "camera_id", "source_event_id", "detected_at",
-        "face_embedding_ciphertext", "digest", "key_id", "nonce", "algorithm", "dimensions",
+        "face_embedding_ciphertext", "face_embedding_digest", "face_embedding_key_id",
+        "face_embedding_nonce", "face_embedding_algorithm", "face_embedding_model",
+        "face_embedding_dimensions",
     ]:
         assert field in payload

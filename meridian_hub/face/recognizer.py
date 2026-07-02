@@ -17,9 +17,20 @@ class FaceRecognizer:
 
     def __init__(
         self, model_pack: str = "buffalo_s", det_size: tuple[int, int] = (320, 320),
-        preferred_provider: str = "directml",
+        preferred_provider: str = "cpu",
         app_factory: Callable[[str, list[str]], object] | None = None,
     ):
+        # Default is "cpu", not "directml" -- unlike our own exported pose
+        # model (which DirectML runs fine, see benchmarks/), InsightFace's
+        # bundled SCRFD detector throws a RUNTIME_EXCEPTION on a Reshape
+        # node under DmlExecutionProvider on this GPU/driver, confirmed by
+        # actually running it against real video (tools/smoke_test_face_video.py),
+        # not assumed. The failure happens at inference time, not session
+        # construction, so the try/except below alone can't catch it --
+        # detect_and_embed() has its own runtime fallback for defense in
+        # depth, but the safe default avoids hitting that path at all.
+        self._model_pack = model_pack
+        self._det_size = det_size
         provider_map = {"directml": "DmlExecutionProvider", "cpu": "CPUExecutionProvider"}
         preferred = provider_map.get(preferred_provider, "CPUExecutionProvider")
 
@@ -43,7 +54,22 @@ class FaceRecognizer:
         return FaceAnalysis(name=model_pack, providers=providers)
 
     def detect_and_embed(self, frame: np.ndarray) -> list[FaceDetection]:
-        faces = self._app.get(frame)
+        try:
+            faces = self._app.get(frame)
+        except Exception:
+            if self.active_provider == "cpu":
+                raise  # already on CPU, nothing left to fall back to
+            logger.warning(
+                "FaceAnalysis inference failed on %s (construction succeeded but a real "
+                "forward pass didn't -- this is the exact failure mode session-construction "
+                "checks can't catch). Rebuilding on CPUExecutionProvider and retrying this frame.",
+                self.active_provider,
+            )
+            self._app = self._app_factory(self._model_pack, ["CPUExecutionProvider"])
+            self.active_provider = "cpu"
+            self._app.prepare(ctx_id=0, det_size=self._det_size)
+            faces = self._app.get(frame)
+
         results = []
         for face in faces:
             x1, y1, x2, y2 = face.bbox

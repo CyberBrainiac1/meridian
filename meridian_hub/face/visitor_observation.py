@@ -7,12 +7,14 @@ from meridian_hub.face.embedding_encryption import EncryptedEmbedding
 
 
 class VisitorFaceObservation(BaseModel):
-    """Matches Codex's ingest-unknown-person Supabase contract field-for-
-    field (see codex.md's corrected task handoff). No enrollment/approval
-    workflow -- this is a plain observation record. face_embedding_ciphertext
-    and friends come from EmbeddingEncryptor; this schema never accepts a
-    plaintext embedding field, so it's structurally impossible to send one
-    by accident."""
+    """Matches Codex's live ingest-visitor-face Supabase contract
+    field-for-field (codex.md, "Task handoff: encrypted visitor-face
+    observation storage" -- field names are prefixed face_embedding_* per
+    Codex's finalized Edge Function, not the earlier unprefixed draft).
+    No enrollment/approval workflow -- this is a plain observation
+    record. Everything under face_embedding_* comes from
+    EmbeddingEncryptor's output; this schema has no field for a plaintext
+    embedding, so it's structurally impossible to send one by accident."""
 
     facility_id: str
     camera_id: str
@@ -22,22 +24,24 @@ class VisitorFaceObservation(BaseModel):
     quality_score: float
     match_confidence: float | None = None
     face_embedding_ciphertext: str
-    digest: str
-    key_id: str
-    nonce: str
-    algorithm: str
-    dimensions: int
+    face_embedding_digest: str
+    face_embedding_key_id: str
+    face_embedding_nonce: str
+    face_embedding_algorithm: str
+    face_embedding_model: str
+    face_embedding_dimensions: int
 
 
 def build_visitor_observation(
     *, facility_id: str, camera_id: str, source_event_id: str, detected_at: datetime,
     match_status: str, quality_score: float, match_confidence: float | None,
-    encrypted: EncryptedEmbedding,
+    encrypted: EncryptedEmbedding, embedding_model: str = "buffalo_s/arcface",
 ) -> VisitorFaceObservation:
     return VisitorFaceObservation(
         facility_id=facility_id, camera_id=camera_id, source_event_id=source_event_id,
         detected_at=detected_at, match_status=match_status, quality_score=quality_score,
         match_confidence=match_confidence, face_embedding_ciphertext=encrypted.ciphertext,
-        digest=encrypted.digest, key_id=encrypted.key_id, nonce=encrypted.nonce,
-        algorithm=encrypted.algorithm, dimensions=encrypted.dimensions,
+        face_embedding_digest=encrypted.digest, face_embedding_key_id=encrypted.key_id,
+        face_embedding_nonce=encrypted.nonce, face_embedding_algorithm=encrypted.algorithm,
+        face_embedding_model=embedding_model, face_embedding_dimensions=encrypted.dimensions,
     )
