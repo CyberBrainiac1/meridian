@@ -27,7 +27,9 @@ export function buildSendResult(notification: PendingNotification): SendResult {
   const target = notification.resident_id
     ? `family of resident ${notification.resident_id}`
     : `care team at facility ${notification.facility_id}`;
-  console.log(`[notify-family] would send ${notification.channel} to ${target}: ${notification.body}`);
+  console.log(
+    `[notify-family] would send ${notification.channel} to ${target}: ${notification.body}`,
+  );
   return { id: notification.id, status: "sent", sent_at: new Date().toISOString() };
 }
 

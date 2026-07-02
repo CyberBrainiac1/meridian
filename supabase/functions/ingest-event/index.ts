@@ -124,16 +124,19 @@ Deno.serve(async (request) => {
     },
   };
 
-  const response = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/incident_events?select=id`, {
-    method: "POST",
-    headers: {
-      "apikey": serviceKey,
-      "authorization": `Bearer ${serviceKey}`,
-      "content-type": "application/json",
-      "prefer": "return=representation",
+  const response = await fetch(
+    `${supabaseUrl.replace(/\/$/, "")}/rest/v1/incident_events?select=id`,
+    {
+      method: "POST",
+      headers: {
+        "apikey": serviceKey,
+        "authorization": `Bearer ${serviceKey}`,
+        "content-type": "application/json",
+        "prefer": "return=representation",
+      },
+      body: JSON.stringify(row),
     },
-    body: JSON.stringify(row),
-  });
+  );
 
   if (!response.ok) {
     if (response.status === 409) {
@@ -212,7 +215,10 @@ function validatePayload(payload: IncidentPayload): { ok: true } | { ok: false; 
     return { ok: false, error: "generated_at_required" };
   }
 
-  if (!Array.isArray(payload.reason_codes) || !payload.reason_codes.every((item) => typeof item === "string")) {
+  if (
+    !Array.isArray(payload.reason_codes) ||
+    !payload.reason_codes.every((item) => typeof item === "string")
+  ) {
     return { ok: false, error: "reason_codes_required" };
   }
 
@@ -228,7 +234,9 @@ function validatePayload(payload: IncidentPayload): { ok: true } | { ok: false; 
     return { ok: false, error: "metadata_invalid" };
   }
 
-  if (payload.summary !== undefined && payload.summary !== null && typeof payload.summary !== "string") {
+  if (
+    payload.summary !== undefined && payload.summary !== null && typeof payload.summary !== "string"
+  ) {
     return { ok: false, error: "summary_invalid" };
   }
 
@@ -237,7 +245,10 @@ function validatePayload(payload: IncidentPayload): { ok: true } | { ok: false; 
     return { ok: true };
   }
 
-  if (!evidencePath.startsWith(`${facilityId}/`) || evidencePath.includes("..") || !evidencePath.endsWith(".bin")) {
+  if (
+    !evidencePath.startsWith(`${facilityId}/`) || evidencePath.includes("..") ||
+    !evidencePath.endsWith(".bin")
+  ) {
     return { ok: false, error: "evidence_path_invalid" };
   }
 

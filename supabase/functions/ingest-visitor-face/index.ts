@@ -128,7 +128,11 @@ Deno.serve(async (request) => {
 
   if (!response.ok) {
     if (response.status === 409) {
-      const retry = await findExistingVisitorFaceObservation(supabaseUrl, serviceKey, sourceEventId);
+      const retry = await findExistingVisitorFaceObservation(
+        supabaseUrl,
+        serviceKey,
+        sourceEventId,
+      );
       if (retry.id) {
         return jsonResponse({ id: retry.id, deduped: true }, 200);
       }
@@ -216,9 +220,14 @@ function validatePayload(payload: VisitorFacePayload): { ok: true } | { ok: fals
     return { ok: false, error: "face_embedding_algorithm_invalid" };
   }
 
-  if (payload.face_embedding_dimensions !== undefined && payload.face_embedding_dimensions !== null) {
+  if (
+    payload.face_embedding_dimensions !== undefined && payload.face_embedding_dimensions !== null
+  ) {
     const dimensions = payload.face_embedding_dimensions;
-    if (typeof dimensions !== "number" || !Number.isInteger(dimensions) || dimensions <= 0 || dimensions > 4096) {
+    if (
+      typeof dimensions !== "number" || !Number.isInteger(dimensions) || dimensions <= 0 ||
+      dimensions > 4096
+    ) {
       return { ok: false, error: "face_embedding_dimensions_invalid" };
     }
   }
@@ -230,14 +239,19 @@ function validatePayload(payload: VisitorFacePayload): { ok: true } | { ok: fals
     }
   }
 
-  if (payload.face_embedding_expires_at !== undefined && payload.face_embedding_expires_at !== null) {
+  if (
+    payload.face_embedding_expires_at !== undefined && payload.face_embedding_expires_at !== null
+  ) {
     const expiresAt = valueAsString(payload.face_embedding_expires_at);
     if (!expiresAt || Number.isNaN(Date.parse(expiresAt))) {
       return { ok: false, error: "face_embedding_expires_at_invalid" };
     }
   }
 
-  if (payload.face_location !== undefined && payload.face_location !== null && typeof payload.face_location !== "object") {
+  if (
+    payload.face_location !== undefined && payload.face_location !== null &&
+    typeof payload.face_location !== "object"
+  ) {
     return { ok: false, error: "face_location_invalid" };
   }
 
@@ -250,7 +264,10 @@ function validatePayload(payload: VisitorFacePayload): { ok: true } | { ok: fals
     return { ok: true };
   }
 
-  if (!faceImagePath.startsWith(`${facilityId}/`) || faceImagePath.includes("..") || !faceImagePath.endsWith(".bin")) {
+  if (
+    !faceImagePath.startsWith(`${facilityId}/`) || faceImagePath.includes("..") ||
+    !faceImagePath.endsWith(".bin")
+  ) {
     return { ok: false, error: "encrypted_face_image_path_invalid" };
   }
 
