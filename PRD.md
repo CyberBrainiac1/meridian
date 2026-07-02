@@ -1,10 +1,10 @@
-# Meridian PRD v1.0
+# Meridian PRD v1.1
 
 **From Lumi AI to Meridian: a functional care intelligence platform, built to win YBVC**
 
 Team: Dhairya Gurnani (software, full app, outreach), Pranav Emmadi (hardware, camera systems), Megan (UI/UX, marketing)
 
-Status: Draft v1.0 | Date: July 2, 2026
+Status: Draft v1.1 | Date: July 2, 2026
 
 ---
 
@@ -93,6 +93,7 @@ The room unit: camera plus edge compute. Key architectural decision from the Lum
 - Fall detection via on-device pose estimation
 - Gemini-powered validation layer in the cloud confirms ambiguous events before alerting (kills false alarms, the number one reason facilities rip these systems out)
 - Facial recognition at entry points for visitor logging (Supabase-backed, carried over from Lumi)
+- New-person detection: if an entry-point face does not match a consented resident, staff member, or approved visitor, Meridian creates a pending encrypted enrollment record in Supabase rather than silently adding the person as known
 - Works offline-first: alerts queue locally if WiFi drops
 
 ### 7.2 Meridian Care (caregiver app) — Dhairya
@@ -110,7 +111,7 @@ The trust product, and the emotional core of the pitch.
 
 - Daily "Maggie had a good day" summaries (activity level, meals attended, visitors)
 - Instant SMS/push for confirmed emergencies, with resolution status ("Staff reached her in 90 seconds")
-- Visitor log visibility
+- Visitor log visibility, including clearly labeled unknown/pending visitor entries when the facility has enabled face recognition
 - Explicit privacy controls: families see summaries and events, never live video
 
 ### 7.4 Meridian Insights (facility dashboard) — Dhairya + Megan
@@ -121,6 +122,7 @@ The web dashboard (Next.js, carried over from Lumi's onboarding app) that turns 
 - Response-time analytics per shift (this is the metric directors are judged on)
 - Fall-risk trend flags per resident based on movement pattern changes over weeks
 - Incident reports auto-generated for compliance and liability documentation
+- Admin review queue for unknown-person detections: approve, reject, merge with an existing person, or mark as one-time visitor
 
 ---
 
@@ -164,6 +166,7 @@ The rule: if it is on a pitch slide, it must work live.
 - [ ]  Predictive fall-risk score (even a v1 heuristic on gait speed)
 - [ ]  Shift handoff auto-summary
 - [ ]  Visitor recognition and logging polished for demo
+- [ ]  New-person detection at entry points: unknown faces create encrypted pending enrollment records in Supabase for admin review, never automatic enrollment
 
 ### Future (P2)
 
@@ -173,9 +176,31 @@ The rule: if it is on a pitch slide, it must work live.
 
 - **No medical claims or diagnosis.** Keeps us out of FDA Class II. Deliberate.
 - **No raw video storage in the cloud by default.** Privacy architecture is the moat; do not compromise it for a feature.
+- **No plaintext biometric database.** Face embeddings, visitor snapshots, and pending enrollment evidence must be encrypted before or during backend persistence. Supabase may hold ciphertext, metadata, RLS policies, and key IDs, but not decryption keys that would make stolen database contents useful by themselves.
+- **No silent facial enrollment.** Unknown people are not automatically converted into recognized residents, staff, or visitors. Face recognition requires facility approval and the relevant resident/legal-representative consent path.
 - **No Android caregiver app for v1.** Facilities can standardize on managed iPhones; Android doubles Dhairya's surface area for zero pitch value.
 - **No in-home consumer version for v1.** B2C is a real market but a different sales motion; it stays a roadmap slide.
 - **No custom hardware manufacturing.** Off-the-shelf compute in a clean enclosure. We are a software and intelligence company that ships on commodity hardware.
+
+### 9.1 New-person detection and encrypted Supabase enrollment
+
+This feature extends visitor recognition into a compliant enrollment workflow:
+
+1. The Hub/Sense pipeline detects a face at an entry-point camera and computes a local face embedding.
+2. The Hub compares the embedding against the local approved-person store.
+3. If no approved match clears the threshold, the Hub emits a `visitor_arrival` event with `match_status: "unknown"` in metadata.
+4. The backend writes a `pending_person_enrollments` record in Supabase scoped to `facility_id`.
+5. The pending record stores only encrypted biometric data and encrypted evidence references: face embedding ciphertext, optional encrypted snapshot path, key ID, nonce, algorithm, quality score, camera ID, detection time, and status.
+6. An admin must approve, reject, merge, or dismiss the record before it can become a known resident/staff/visitor profile.
+
+Security and privacy requirements:
+
+- Default cloud behavior remains metadata-only. Raw frames stay local unless the facility has explicitly enabled encrypted evidence upload.
+- If a snapshot is uploaded, it must be encrypted before storage in the private Supabase bucket, with keys kept outside Supabase or wrapped by a facility-controlled key authority.
+- Face embeddings are biometric data. Treat them as sensitive even though they are not human-viewable images.
+- Row-level security must restrict every pending enrollment, person profile, incident, device heartbeat, and evidence object to the correct facility.
+- Admin actions must be audited: who approved/rejected, when, and whether consent was verified.
+- The UI must never imply that an unknown person is identified until the approval flow is complete.
 
 ---
 

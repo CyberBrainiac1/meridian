@@ -15,7 +15,17 @@ env/
 .env.*
 !.env.example
 firmware/esp32cam/config.h
+supabase/.env
+supabase/functions/.env
+*.pem
+*.key
+*.jwk
+*.agekey
 *.local
+
+# Supabase local CLI state
+supabase/.branches/
+supabase/.temp/
 
 # Runtime data and large generated artifacts
 data/
