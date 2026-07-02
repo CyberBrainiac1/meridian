@@ -572,7 +572,7 @@ Deno.test("buildSendResult logs the channel and body for the stub provider", () 
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `npx -y deno test --allow-none supabase/functions/notify-family/index.test.ts`
+Run: `npx -y deno test --allow-net supabase/functions/notify-family/index.test.ts`
 Expected: FAIL — `index.ts` does not exist yet (module not found).
 
 - [ ] **Step 3: Write the implementation**
@@ -736,8 +736,8 @@ function jsonResponse(body: Record<string, unknown>, status: number): Response {
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `npx -y deno test --allow-none supabase/functions/notify-family/index.test.ts`
-Expected: PASS — both tests green. (`--allow-none` is used because these
+Run: `npx -y deno test --allow-net supabase/functions/notify-family/index.test.ts`
+Expected: PASS — both tests green. (`--allow-net` is required because
 two tests touch no filesystem/network permissions; `Deno.serve` at module
 scope does not start listening during `deno test`, so no network
 permission is required either.)

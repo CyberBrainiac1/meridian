@@ -18,3 +18,6 @@ verify_jwt = true
 
 [functions.ingest-visitor-face]
 verify_jwt = true
+
+[functions.notify-family]
+verify_jwt = false
