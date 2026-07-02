@@ -25,6 +25,7 @@ signed-in user's session (never the service-role key from an app).
 | Live alert feed | `select * from incident_events where facility_id = :id and status in ('open','acknowledged','responding') order by detected_at desc` | Realtime-subscribe to `incident_events` for push-like updates. |
 | Acknowledge/resolve | same `respond_to_incident` RPC as above | |
 | Resident profiles | `select * from resident_profiles where facility_id = :id` | |
+| New-visitor push/banner | `select * from notifications where facility_id = :id and resident_id is null order by created_at desc` | Every `new_visitor`/`unknown` face at an entry camera auto-inserts one of these (see `notify_visitor_arrival` trigger) — you don't need to poll `visitor_face_observations` yourself to catch new arrivals, this table is the alert surface. Realtime-subscribe to `notifications` filtered by `facility_id` for a live banner. |
 
 ## Meridian Family (family app — family role only)
 
@@ -32,6 +33,7 @@ signed-in user's session (never the service-role key from an app).
 | --- | --- | --- |
 | Daily summary / alert feed | `select * from family_incident_feed order by detected_at desc` | Already scoped server-side to the caller's linked resident(s) — do not add a `resident_id` filter expecting it to restrict further access; the view's own `where exists (...)` against `family_member_links` is the actual security boundary. |
 | Visitor log (generic) | `select * from family_visitor_feed order by detected_at desc` | Only returns rows if the linked resident has an active `family_visibility` consent — an empty result is expected/valid, not an error. Copy should read as a count/timeline ("3 visitors today"), never a name — the view has no name column, so this is structurally enforced. |
+| New-visitor notification | `select body, created_at, sent_at from notifications where resident_id = :linked_resident_id order by created_at desc` | Same table/query shape as the "staff responded" follow-up below — a family user's `notifications` feed mixes incident-response updates and new-visitor alerts for their linked resident's facility; use `incident_id is not null` vs `is null` to tell them apart in the UI if you want separate sections. |
 | "Staff reached her in 90 seconds" follow-up copy | `select body, created_at, sent_at from notifications where resident_id = :linked_resident_id order by created_at desc` | Populated by `respond_to_incident` → written by `notify-family`, see realtime-channels.md for how to know when a new one lands. |
 
 ## Roles reference
@@ -58,6 +60,10 @@ real flow, and the backend enforces the order:
    (server-stamped from the session, never client-supplied).
 4. That resolution — not a client action — is what inserts a row into
    `notifications`, which `notify-family` then delivers. The family app
-   has nothing to show until a caregiver has actually responded.
+   has nothing to show until a caregiver has actually responded. The same
+   is true for visitor arrivals: a new/unknown face at an entry camera
+   auto-inserts `notifications` rows (one for the care team, one per
+   consented family link) via a database trigger, not an app-side call —
+   no ingestion path can forget to notify.
 5. Every screen reads from a single documented view/table, never a
    hand-joined query across raw tables.

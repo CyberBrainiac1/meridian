@@ -41,3 +41,24 @@ Deno.test("buildSendResult logs the channel and body for the stub provider", () 
   assertEquals(logs.length, 1);
   assertEquals(logs[0].includes("res-2"), true);
 });
+
+Deno.test("buildSendResult addresses facility-wide notifications to the care team, not a null resident", () => {
+  const logs: string[] = [];
+  const originalLog = console.log;
+  console.log = (msg: string) => logs.push(msg);
+  try {
+    buildSendResult({
+      id: "33333333-3333-3333-3333-333333333333",
+      facility_id: "fac-poc-001",
+      resident_id: null,
+      incident_id: null,
+      channel: "push",
+      body: "New visitor detected at Main Entrance.",
+    });
+  } finally {
+    console.log = originalLog;
+  }
+  assertEquals(logs.length, 1);
+  assertEquals(logs[0].includes("care team at facility fac-poc-001"), true);
+  assertEquals(logs[0].includes("null"), false);
+});

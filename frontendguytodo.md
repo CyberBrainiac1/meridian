@@ -48,6 +48,10 @@ Ping in the shared chat once that's done so this list can be de-blocked.
       UI states, not a generic failure toast.
 - [ ] Realtime refresh: subscribe to `incident_events` filtered by
       `facility_id` to update the floor view/alert feed live.
+- [ ] New-visitor banner: `select * from notifications where facility_id
+      = :id and resident_id is null order by created_at desc`. A new/
+      unknown face at an entry camera auto-inserts one of these — you
+      don't need to poll `visitor_face_observations` to catch it.
 
 ## Meridian Care (caregiver app)
 
@@ -63,6 +67,10 @@ Ping in the shared chat once that's done so this list can be de-blocked.
 - [ ] Copy rule from the PRD: "Maggie needs help in Room 12," never
       "Event #4471 triggered." The `summary` field on incidents already
       follows this pattern in the seed data — match its tone.
+- [ ] New-visitor push/banner: same source as Insights above (`notifications`
+      where `facility_id = :id and resident_id is null`). This is the
+      caregiver-facing "someone just walked in" alert, not just a passive
+      log entry — surface it like an alert, not buried in a list.
 - [ ] No live video anywhere in this app.
 
 ## Meridian Family (family app)
@@ -78,9 +86,13 @@ Ping in the shared chat once that's done so this list can be de-blocked.
       `family_visibility` consent yet), not an error state. Show a
       count/timeline ("3 visitors today"), never a name — the view has no
       name column, so don't try to join one in.
-- [ ] "Staff reached her in 90 seconds" follow-up copy: `select body,
-      created_at, sent_at from notifications where resident_id =
-      :linked_resident_id order by created_at desc`.
+- [ ] "Staff reached her in 90 seconds" follow-up copy AND new-visitor
+      alerts share one query: `select body, created_at, sent_at,
+      incident_id from notifications where resident_id =
+      :linked_resident_id order by created_at desc`. Use
+      `incident_id is not null` vs `is null` to split into "incident
+      updates" vs "new visitor" sections if the design calls for it —
+      it's one feed at the data layer either way.
 - [ ] Live updates: poll `family_incident_feed` + `notifications` every
       15-30s. No realtime subscription for this role (see
       realtime-channels.md for why).

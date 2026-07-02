@@ -12,7 +12,7 @@ Realtime does not support subscribing to a *view*).
 | Channel | Table | Who subscribes | Payload use |
 | --- | --- | --- | --- |
 | `incident-events-<facility_id>` | `incident_events`, filter `facility_id=eq.<id>` | Insights dashboard, Care app (owner/admin/caregiver/viewer) | New/updated incident → refresh floor view / alert feed. |
-| `notifications-<facility_id>` | `notifications`, filter `facility_id=eq.<id>` | Insights dashboard (audit trail) | New row → notification was queued; `status` flips `pending`→`sent` once `notify-family` processes it. |
+| `notifications-<facility_id>` | `notifications`, filter `facility_id=eq.<id>` | Insights dashboard (audit trail), Care app (new-visitor banner: filter client-side for `resident_id is null`) | New row → notification was queued; `status` flips `pending`→`sent` once `notify-family` processes it. Rows come from two sources now: `respond_to_incident` (incident-linked, `incident_id` set) and the `notify_visitor_arrival` trigger (visitor-linked, `incident_id` null). |
 
 For the Family app: since it can't subscribe to `incident_events`
 directly (no RLS access) or to a view (Realtime limitation), poll

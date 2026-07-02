@@ -1,6 +1,7 @@
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-internal-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -23,9 +24,10 @@ interface SendResult {
 // Twilio (or Expo push) call once credentials are available — the caller
 // (Deno.serve handler below) doesn't need to change.
 export function buildSendResult(notification: PendingNotification): SendResult {
-  console.log(
-    `[notify-family] would send ${notification.channel} to family of resident ${notification.resident_id}: ${notification.body}`,
-  );
+  const target = notification.resident_id
+    ? `family of resident ${notification.resident_id}`
+    : `care team at facility ${notification.facility_id}`;
+  console.log(`[notify-family] would send ${notification.channel} to ${target}: ${notification.body}`);
   return { id: notification.id, status: "sent", sent_at: new Date().toISOString() };
 }
 
