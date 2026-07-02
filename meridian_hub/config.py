@@ -10,8 +10,12 @@ class Settings(BaseSettings):
     # NoDecode: pydantic-settings otherwise tries to JSON-parse list-typed
     # env vars before validators run, which fails on a plain comma list.
     camera_sources: Annotated[list[str], NoDecode] = ["0"]
-    target_fps: int = 15
-    pose_model_path: str = "models/yolo11s-pose.onnx"
+    # Camera-limited, not model-limited: GPU benchmark (see
+    # benchmarks/laptop_gpu_pose_benchmark_2026-07-02.md) measured 218 FPS
+    # at full 640x480 with DirectML, so 30 FPS is what a real camera can
+    # deliver, not a compute ceiling like it was on the Pi.
+    target_fps: int = 30
+    pose_model_path: str = "models/yolo11s-pose-480x640.onnx"
     inference_provider: Literal["directml", "cpu"] = "directml"
     facility_id: str = "fac-poc-001"
     building_id: str = "bld-poc-001"
