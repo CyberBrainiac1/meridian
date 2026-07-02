@@ -1,12 +1,14 @@
 # Meridian Sense — Technical Integration PRD (for Dhairya)
 
-From: Pranav | To: Dhairya | Date: 2026-07-02 | Status: v1
+From: Pranav | To: Dhairya | Date: 2026-07-02 | Status: v1.1 (updated: Pi 4B target, fully local — no Gemini)
 
 ## Why this doc exists
 
 This is the contract between **Meridian Sense** (the room edge unit — camera, pose estimation, fall detection, facial recognition, all running on the Pi) and everything you own (Care app, Family app, Insights dashboard, backend/Supabase). You shouldn't need to read Sense's internals to build against it — everything you need to receive events, show alerts, and populate Insights is below. If something here doesn't match what your backend expects, tell me and we change the contract, not the code silently on one side.
 
 Sense is built and running today (on a dev machine, camera-agnostic — same code path deploys to the Pi). It currently talks to a **mock ingestion server I built** that implements the exact contract below, so you can point your backend at the same schema whenever you're ready and nothing on my side has to change.
+
+**Update from v1:** target hardware is a **Raspberry Pi 4B**, and there are **no AI API keys for this project** — Sense runs entirely on-device, including fall validation (no Gemini or any other cloud AI call anywhere in the pipeline). This actually simplifies the contract below: `validated_by` no longer has cloud/timeout variants, and the "suspected → escalate after N seconds" behavior is now near-instant since it's a local compute step, not a network wait.
 
 ## 1. What Sense sends you
 
@@ -23,14 +25,14 @@ Sense pushes three payload types, always as an HTTP `POST` with a JSON body, to 
   "event_type": "fall",              // "fall" only in v1 (see section 2 for tier mapping)
   "severity": "confirmed",           // "confirmed" | "suspected"
   "confidence": 0.94,                // 0-1
-  "validated_by": "state_machine",   // "state_machine" | "gemini" | "gemini_timeout_escalation"
+  "validated_by": "state_machine",   // "state_machine" | "local_secondary_validator"
   "validation_rationale": "Rapid vertical drop, horizontal posture sustained 2.3s, no recovery motion.",
   "detected_at": "2026-07-02T14:03:11.204Z",
   "alert_fired_at": "2026-07-02T14:03:14.881Z"
 }
 ```
 
-- `severity: "suspected"` means Sense wasn't confident enough to auto-confirm and either Gemini validation is in flight/failed-open, or the mock/rule validator flagged it — treat it as a real alert (worth paging staff), just with lower confidence, and expect a possible follow-up event with the same logic superseding it. Currently Sense escalates unresolved `suspected` events to `confirmed` after a 20s validation timeout rather than staying silent, so you should always get *something* actionable, never silence on a real fall.
+- `severity: "suspected"` means the primary state machine wasn't confident enough to auto-confirm, so a second on-device validation pass (`local_secondary_validator` — different signal than the primary, no network call, runs in well under a second) is invoked; if that pass is also inconclusive it fails open to `confirmed` rather than staying silent. Either way, treat `suspected` as a real, page-worthy alert — just with lower confidence — and expect a possible follow-up event superseding it. Because validation is local, this all happens fast and doesn't depend on the Pi's WiFi being up.
 - `resident_id` is null until room-to-resident assignment exists in your system — Sense only knows `room_id` for certain. You'll need a lookup on your side (or tell me the assignment API and I'll have Sense resolve it directly).
 
 **PRD note on severity tiers:** the Care app spec (PRD 7.2) lists five tiers — fall confirmed, fall suspected, distress, missed medication, unusual inactivity. Sense v1 only produces the first two (`fall` events with `confirmed`/`suspected` severity). Distress detection, medication tracking, and inactivity flags are not in Sense's v1 scope — if your alert feed UI expects all five tiers to originate from the same event stream, we should talk about whether those come from Sense later or from a different source.
@@ -89,11 +91,13 @@ PRD success metric: staged fall → phone alert in **under 15 seconds**, end to 
 | Stage | Budget |
 |---|---|
 | Fall detected by state machine (capture → CONFIRMED) | < 5s |
-| Gemini validation, if SUSPECTED (parallel path, capped) | < 20s (auto-escalates past this) |
+| Local secondary validation, if SUSPECTED (on-device, no network) | < 1s |
 | Local queue → HTTP POST to your endpoint | < 1s (LAN/WiFi, non-degraded) |
 | **Your side: endpoint ack → push notification delivered to phone** | **whatever's left of the 15s budget — realistically needs to be under ~9-10s** |
 
-Worth syncing on early: the confirmed-fall path (the common case, no Gemini round-trip) leaves you most of the 15s budget, but if push notification delivery (APNs round-trip, etc.) has its own tail latency, we should each measure our half separately rather than only discovering the combined number is over budget during a rehearsal.
+Worth syncing on early: since validation is fully local now (no cloud round-trip), the confirmed-and-suspected paths both leave you most of the 15s budget — Sense's own latency no longer depends on connectivity at all. If push notification delivery (APNs round-trip, etc.) has its own tail latency, we should each measure our half separately rather than only discovering the combined number is over budget during a rehearsal.
+
+One more Pi 4B-specific note: pose estimation runs at 320×256 / ~10 FPS by default on this hardware (no accelerator) — this is a measured number, not a guess: we benchmarked the actual pose model on the actual Pi 4B unit and 640×480 turned out to only sustain ~2.9 FPS (too slow), while 320×256 comfortably hits ~10 FPS with zero thermal throttling. The state machine's thresholds are time-based (seconds), not frame-count-based, so this doesn't change correctness, just gives less visual headroom than a higher-FPS setup would. Flagging in case it matters for how you scope any video-adjacent UI (it shouldn't — you never receive video from Sense either way).
 
 ## 5. What's mocked vs. real today
 
