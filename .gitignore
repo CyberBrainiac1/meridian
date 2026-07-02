@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+firmware/esp32cam/config.h
+*.local
+
+# Runtime data and large generated artifacts
+data/
+models/
+*.sqlite
+*.sqlite3
+*.db
+*.onnx
+*.pt
+*.mp4
+*.mov
+*.avi
+
+# Arduino / embedded build output
+build/
+*.bin
+*.elf
+*.map
+*.uf2
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local agent/app state
+.agents/
+.codex/
