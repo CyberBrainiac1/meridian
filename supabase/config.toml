@@ -16,5 +16,5 @@ file_size_limit = "100MiB"
 [functions.ingest-event]
 verify_jwt = true
 
-[functions.ingest-unknown-person]
+[functions.ingest-visitor-face]
 verify_jwt = true

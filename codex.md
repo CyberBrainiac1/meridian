@@ -20,28 +20,45 @@
 
 ## Supabase backend setup
 
-- Supabase CLI was not installed and the repo was not linked to a live Supabase project when the backend scaffold was added.
+- Live Supabase project URL provided by the user: `https://wgpvaazhpfceountxxel.supabase.co`.
+- Do not store the database password, service-role key, access token, or any other Supabase secret in this repo.
 - Repo-owned Supabase setup lives in `supabase/`, with deployment notes in `docs/supabase-setup.md`.
-- The first backend boundary stores authenticated incident metadata and encrypted evidence blobs only. Raw camera frames should remain local to the Hub by default.
+- The first backend boundary stores authenticated incident metadata, encrypted incident evidence blobs, and encrypted visitor-face observations only. Raw camera frames should remain local to the Hub by default.
 - Evidence encryption rule: Supabase may store ciphertext, object path, hash, nonce, algorithm, key ID, and expiry metadata, but decryption keys must stay outside Supabase.
-- Unknown-person enrollment backend lives in `pending_person_enrollments`. The `ingest-unknown-person` Edge Function accepts only pre-encrypted face embedding ciphertext and metadata; plaintext vectors are rejected.
-- Approval or merge of an unknown face into a recognized person is blocked in the database unless a same-facility person has active `face_recognition` consent. Review actions are audited in `pending_person_enrollment_audit`.
+- Corrected visitor/new-person backend lives in `visitor_face_observations`. The `ingest-visitor-face` Edge Function accepts only pre-encrypted InsightFace/ArcFace embedding ciphertext and metadata; plaintext vectors and plaintext face images are rejected.
+- There is no `pending_person_enrollments` table, no approve/reject/merge/dismiss workflow, and no automatic identity-profile creation for unknown visitors.
 
-## Task handoff: encrypted visitor-face observation storage (corrected 2026-07-02, supersedes the enrollment version below)
+## Task handoff: encrypted visitor-face observation storage
 
-**User correction, explicit:** "new person" means an unrecognized visitor arriving at the elderly resident's home -- not an admin enrollment/approval workflow. The `pending_person_enrollments` + approve/reject/merge framing in the section below is deleted/superseded. Per chat, Codex is already replacing that backend contract with encrypted visitor-face **observation** storage (no pending/approval state machine).
+**User correction, explicit:** "new person" means an unrecognized visitor arriving at the elderly resident's home -- not an admin enrollment/approval workflow.
 
-**What the Hub sends (Part 2, `meridian_hub/face/`, now implemented and tested -- InsightFace, not face_recognition/dlib, per final decision this session):**
-- `meridian_hub/face/recognizer.py`: InsightFace (buffalo_s) detection + 512-d ArcFace embedding.
-- `meridian_hub/face/detector.py`: quality gate (blur/size/frontal) picks the one clean snapshot worth acting on.
-- `meridian_hub/face/visitor_store.py`: local SQLite match against enrolled residents/staff. On no match (`match_status: "unknown"`), the Hub is expected to encrypt the embedding *before* it ever leaves the device and send an encrypted visitor-face observation, matching Codex's `ingest-unknown-person` contract shape: `facility_id`, `camera_id`, `source_event_id`, `detected_at`, quality/match scores, plus `face_embedding_ciphertext`, `digest`, `key_id`, `nonce`, `algorithm`, `dimensions`. Plaintext embeddings are never sent.
-- The Hub-side encryption step (AES-256-GCM, key never leaves the Hub) and the observation-event builder matching this exact field shape are the next piece of Hub work, not yet implemented as of this note.
+**Final face stack decision:** keep InsightFace. The user briefly asked about `ageitgey/face_recognition`, but corrected the stack back to InsightFace. Do not switch the Hub or Supabase contract to dlib/face_recognition unless the user explicitly reverses this later.
+
+**What the Hub sends (Part 2, `meridian_hub/face/`):**
+
+- `meridian_hub/face/recognizer.py`: InsightFace (`buffalo_s`) detection + 512-dimensional ArcFace embedding.
+- `meridian_hub/face/detector.py`: quality gate picks the one clean snapshot worth acting on.
+- `meridian_hub/face/visitor_store.py`: local SQLite match against known residents/staff/visitors.
+- `meridian_hub/face/embedding_encryption.py`: AES-256-GCM encryption; key stays on the Hub/facility-controlled side.
+- `meridian_hub/face/visitor_observation.py`: builds the encrypted visitor observation payload.
+
+On no match (`match_status: "new_visitor"` or `"unknown"`), the Hub should encrypt the embedding before it leaves the device and send an encrypted visitor-face observation to `ingest-visitor-face` with:
+
+- `facility_id`
+- `camera_id`
+- `source_event_id`
+- `detected_at`
+- `match_status`
+- quality/match scores
+- `face_embedding_ciphertext`
+- `face_embedding_digest`
+- `face_embedding_key_id`
+- `face_embedding_nonce`
+- `face_embedding_algorithm`
+- `face_embedding_model`
+- `face_embedding_dimensions`
+- optional encrypted face image metadata
+
+Plaintext embeddings, plaintext face crops, raw images, video, and base64 media must never be sent to Supabase.
 
 Report questions in chat; canonical event schema for everything else is `meridian_hub/events/schemas.py` (PRD section 17).
-
-<details>
-<summary>Superseded: original enrollment-workflow framing (kept for history, do not implement)</summary>
-
-Original ask was a `pending_person_enrollments` table with approve/reject/merge/dismiss admin review and a consent gate before a face becomes "recognized." The user corrected this away -- no enrollment state machine, just encrypted observation logging of visitor arrivals.
-
-</details>

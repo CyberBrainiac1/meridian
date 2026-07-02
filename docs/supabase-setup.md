@@ -1,14 +1,15 @@
 # Supabase Setup
 
-This project uses Supabase for authenticated event metadata, encrypted incident evidence storage, and Edge Function ingestion. Supabase is not the system of record for raw camera frames.
+This project uses Supabase for authenticated event metadata, encrypted incident evidence storage, encrypted visitor-face observation storage, and Edge Function ingestion. Supabase is not the system of record for raw camera frames, plaintext face images, or plaintext face encodings.
 
 ## Current Repository Setup
 
-- `supabase/config.toml` keeps JWT verification on for `ingest-event` and `ingest-unknown-person`.
-- `supabase/migrations/20260702220000_initial_security_and_ingest.sql` creates the first schema, RLS policies, grants, and the private `incident-evidence` Storage bucket.
+- `supabase/config.toml` keeps JWT verification on for `ingest-event` and `ingest-visitor-face`.
+- `supabase/migrations/20260702220000_initial_security_and_ingest.sql` creates the first schema, RLS policies, grants, and the private `incident-evidence` and `visitor-face-evidence` Storage buckets.
 - `supabase/functions/ingest-event/index.ts` accepts incident metadata only. It rejects raw frame, image, video, and base64 fields.
-- `supabase/functions/ingest-unknown-person/index.ts` accepts unknown-face enrollment signals only after biometric embeddings have already been encrypted by the Hub or a facility-controlled key service.
+- `supabase/functions/ingest-visitor-face/index.ts` accepts visitor/new-person face observations only after the InsightFace embedding and optional face image have already been encrypted by the Hub or a facility-controlled key service.
 - `docs/security/encrypted-evidence.md` defines the evidence encryption model.
+- `docs/security/encrypted-visitor-faces.md` defines the visitor-face encryption model.
 
 ## Apply To A Supabase Project
 
@@ -18,7 +19,7 @@ The Supabase CLI was not installed locally when this setup was added, and this r
 npx supabase link --project-ref <project-ref>
 npx supabase db push
 npx supabase functions deploy ingest-event --project-ref <project-ref>
-npx supabase functions deploy ingest-unknown-person --project-ref <project-ref>
+npx supabase functions deploy ingest-visitor-face --project-ref <project-ref>
 ```
 
 If the deployed function does not receive a default service-role secret in its runtime, set an explicit secret:
@@ -32,13 +33,13 @@ Keep service-role and secret keys out of browser apps, mobile apps, camera firmw
 ## Access Model
 
 - `anon` receives no table access.
-- `authenticated` users can read only facilities, cameras, incidents, and device heartbeats for facilities where they have a `facility_members` row.
+- `authenticated` users can read only facilities, cameras, incidents, device heartbeats, people, consents, and visitor-face observations for facilities where they have a `facility_members` row.
 - `authenticated` caregivers/admins can update only the `status` column on incidents for their facility.
 - Service-role access is reserved for backend ingestion and operations.
-- Evidence objects live in a private Storage bucket and must be encrypted before upload.
-- Unknown-person face embeddings are accepted only as ciphertext plus nonce, algorithm, key ID, digest, model, dimensions, quality score, and expiry metadata.
-- Pending person enrollments require owner/admin review. Approval and merge are blocked unless the target person has an active `face_recognition` consent record.
-- Enrollment review actions are written to `pending_person_enrollment_audit`.
+- Evidence objects live in private Storage buckets and must be encrypted before upload.
+- Visitor face embeddings are accepted only as ciphertext plus nonce, algorithm, key ID, digest, model, dimensions, quality score, and expiry metadata.
+- Optional visitor face images are accepted only as encrypted `.bin` objects in `visitor-face-evidence`, with SHA-256 digest and external key metadata.
+- Decryption keys and wrapping authority must stay outside Supabase or be facility-controlled.
 
 This follows Supabase's current guidance to explicitly grant database permissions and rely on RLS policies instead of assuming tables are safely hidden by default. See:
 
@@ -93,36 +94,43 @@ This follows Supabase's current guidance to explicitly grant database permission
 
 Do not send `image`, `frame`, `raw_image`, `jpeg`, `png`, `video`, `clip`, `base64`, or `bytes` fields to the function.
 
-## Unknown-Person Enrollment Shape
+## Encrypted Visitor Face Observation Shape
 
-`POST /functions/v1/ingest-unknown-person` also requires a Supabase user JWT because `verify_jwt = true`.
+`POST /functions/v1/ingest-visitor-face` requires a Supabase user JWT because `verify_jwt = true`.
+
+This is not an enrollment endpoint. It records that a visitor/new person was observed at an entry camera, while keeping biometric material encrypted before Supabase.
 
 ```json
 {
   "source_event_id": "event-20260702-visitor-0001",
   "facility_id": "fac-poc-001",
   "camera_id": "cam-entry-01",
-  "match_status": "unknown",
-  "person_id": null,
+  "match_status": "new_visitor",
+  "matched_person_id": null,
   "detected_at": "2026-07-02T21:00:00Z",
   "quality_score": 0.91,
-  "match_threshold": 0.78,
+  "match_threshold": 0.6,
   "match_confidence": 0.42,
   "face_embedding_ciphertext": "base64url-or-base64-ciphertext",
   "face_embedding_digest": "64 lowercase hex chars",
   "face_embedding_key_id": "facility-kms-key-id",
   "face_embedding_nonce": "base64url nonce",
   "face_embedding_algorithm": "AES-256-GCM",
-  "face_embedding_model": "arcface",
+  "face_embedding_model": "insightface:buffalo_s:arcface",
   "face_embedding_dimensions": 512,
   "face_embedding_expires_at": "2026-08-01T21:00:00Z",
-  "snapshot_ref": "local:2026-07-02T14-01-09_entry01.jpg",
+  "face_location": {
+    "top": 82,
+    "right": 224,
+    "bottom": 226,
+    "left": 81
+  },
   "metadata": {
     "entry_zone": "main-entrance"
   }
 }
 ```
 
-If an opt-in encrypted snapshot is uploaded, use the `person-enrollment-evidence` bucket and include `encrypted_snapshot_path`, `snapshot_sha256`, `snapshot_key_id`, `snapshot_nonce`, and `snapshot_algorithm`. Do not upload plaintext visitor snapshots.
+If an opt-in encrypted face image is uploaded, use the `visitor-face-evidence` bucket and include `encrypted_face_image_path`, `face_image_sha256`, `face_image_key_id`, `face_image_nonce`, and `face_image_algorithm`. Do not upload plaintext visitor snapshots.
 
-Do not send `embedding`, `face_embedding`, `embedding_vector`, raw image fields, base64 media, or plaintext snapshots to the function.
+Do not send `face_encoding`, `encoding`, `embedding`, `face_embedding`, `face_image`, `face_crop`, raw image fields, base64 media, or plaintext snapshots to the function.

@@ -5,6 +5,7 @@ const corsHeaders = {
 };
 
 const cryptoAlgorithms = new Set(["AES-256-GCM", "XCHACHA20-POLY1305"]);
+const matchStatuses = new Set(["new_visitor", "repeat_visitor", "known_visitor", "unknown"]);
 const forbiddenPlaintextFields = [
   "image",
   "frame",
@@ -18,12 +19,17 @@ const forbiddenPlaintextFields = [
   "base64",
   "bytes",
   "snapshot_bytes",
+  "face_image",
+  "face_crop",
+  "face_crop_bytes",
+  "face_encoding",
+  "encoding",
   "embedding",
   "face_embedding",
   "embedding_vector",
 ];
 
-type EnrollmentPayload = Record<string, unknown>;
+type VisitorFacePayload = Record<string, unknown>;
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
@@ -44,7 +50,7 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "server_not_configured" }, 500);
   }
 
-  let payload: EnrollmentPayload;
+  let payload: VisitorFacePayload;
   try {
     payload = await request.json();
   } catch {
@@ -67,25 +73,23 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: membership.error }, membership.status);
   }
 
-  const existing = await findExistingEnrollment(
-    supabaseUrl,
-    serviceKey,
-    facilityId,
-    valueAsString(payload.source_event_id),
-    payload.face_embedding_digest as string,
-  );
+  const sourceEventId = payload.source_event_id as string;
+  const existing = await findExistingVisitorFaceObservation(supabaseUrl, serviceKey, sourceEventId);
   if (existing.error) {
     return jsonResponse({ error: existing.error }, 502);
   }
   if (existing.id) {
-    return jsonResponse({ id: existing.id, status: "pending", deduped: true }, 200);
+    return jsonResponse({ id: existing.id, deduped: true }, 200);
   }
 
+  const matchStatus = valueAsString(payload.match_status) ?? "new_visitor";
   const row = {
     facility_id: payload.facility_id,
-    camera_id: payload.camera_id ?? null,
-    source_event_id: payload.source_event_id ?? null,
+    camera_id: payload.camera_id,
+    source_event_id: payload.source_event_id,
     detected_at: payload.detected_at,
+    match_status: matchStatus,
+    matched_person_id: payload.matched_person_id ?? null,
     quality_score: payload.quality_score ?? null,
     match_threshold: payload.match_threshold ?? null,
     match_confidence: payload.match_confidence ?? payload.confidence ?? null,
@@ -94,25 +98,25 @@ Deno.serve(async (request) => {
     face_embedding_key_id: payload.face_embedding_key_id,
     face_embedding_nonce: payload.face_embedding_nonce,
     face_embedding_algorithm: payload.face_embedding_algorithm,
-    face_embedding_model: payload.face_embedding_model ?? "arcface",
-    face_embedding_dimensions: payload.face_embedding_dimensions,
+    face_embedding_model: payload.face_embedding_model ?? "insightface:buffalo_s:arcface",
+    face_embedding_dimensions: payload.face_embedding_dimensions ?? 512,
     face_embedding_expires_at: payload.face_embedding_expires_at ?? null,
-    snapshot_local_ref: payload.snapshot_ref ?? null,
-    encrypted_snapshot_path: payload.encrypted_snapshot_path ?? null,
-    snapshot_sha256: payload.snapshot_sha256 ?? null,
-    snapshot_key_id: payload.snapshot_key_id ?? null,
-    snapshot_nonce: payload.snapshot_nonce ?? null,
-    snapshot_algorithm: payload.snapshot_algorithm ?? null,
-    snapshot_expires_at: payload.snapshot_expires_at ?? null,
+    face_location: payload.face_location ?? {},
+    encrypted_face_image_path: payload.encrypted_face_image_path ?? null,
+    face_image_sha256: payload.face_image_sha256 ?? null,
+    face_image_key_id: payload.face_image_key_id ?? null,
+    face_image_nonce: payload.face_image_nonce ?? null,
+    face_image_algorithm: payload.face_image_algorithm ?? null,
+    face_image_expires_at: payload.face_image_expires_at ?? null,
     metadata: {
       ...(isPlainObject(payload.metadata) ? payload.metadata : {}),
       ingest_actor_user_id: actorUserId,
-      match_status: "unknown",
+      face_recognition_library: "InsightFace",
     },
   };
 
   const response = await fetch(
-    `${supabaseUrl.replace(/\/$/, "")}/rest/v1/pending_person_enrollments?select=id,status`,
+    `${supabaseUrl.replace(/\/$/, "")}/rest/v1/visitor_face_observations?select=id,match_status`,
     {
       method: "POST",
       headers: {
@@ -127,39 +131,28 @@ Deno.serve(async (request) => {
 
   if (!response.ok) {
     if (response.status === 409) {
-      const retry = await findExistingEnrollment(
-        supabaseUrl,
-        serviceKey,
-        facilityId,
-        valueAsString(payload.source_event_id),
-        payload.face_embedding_digest as string,
-      );
+      const retry = await findExistingVisitorFaceObservation(supabaseUrl, serviceKey, sourceEventId);
       if (retry.id) {
-        return jsonResponse({ id: retry.id, status: "pending", deduped: true }, 200);
+        return jsonResponse({ id: retry.id, deduped: true }, 200);
       }
     }
 
-    console.error("pending enrollment insert failed", response.status, await response.text());
+    console.error("visitor face observation insert failed", response.status, await response.text());
     return jsonResponse({ error: "insert_failed" }, 502);
   }
 
-  const inserted = await response.json() as Array<{ id: string; status: string }>;
-  return jsonResponse({ id: inserted[0]?.id, status: inserted[0]?.status ?? "pending" }, 201);
+  const inserted = await response.json() as Array<{ id: string; match_status: string }>;
+  return jsonResponse({
+    id: inserted[0]?.id,
+    match_status: inserted[0]?.match_status ?? matchStatus,
+  }, 201);
 });
 
-function validatePayload(payload: EnrollmentPayload): { ok: true } | { ok: false; error: string } {
+function validatePayload(payload: VisitorFacePayload): { ok: true } | { ok: false; error: string } {
   for (const field of forbiddenPlaintextFields) {
     if (Object.hasOwn(payload, field)) {
       return { ok: false, error: "plaintext_biometric_or_media_not_accepted" };
     }
-  }
-
-  if (payload.match_status !== undefined && payload.match_status !== "unknown") {
-    return { ok: false, error: "only_unknown_faces_are_enrolled" };
-  }
-
-  if (payload.person_id !== undefined && payload.person_id !== null) {
-    return { ok: false, error: "known_person_not_pending_enrollment" };
   }
 
   const facilityId = valueAsString(payload.facility_id);
@@ -167,17 +160,25 @@ function validatePayload(payload: EnrollmentPayload): { ok: true } | { ok: false
     return { ok: false, error: "facility_id_required" };
   }
 
-  if (payload.camera_id !== undefined && payload.camera_id !== null) {
-    const cameraId = valueAsString(payload.camera_id);
-    if (!cameraId || !isMeridianId(cameraId)) {
-      return { ok: false, error: "camera_id_invalid" };
-    }
+  const cameraId = valueAsString(payload.camera_id);
+  if (!cameraId || !isMeridianId(cameraId)) {
+    return { ok: false, error: "camera_id_required" };
   }
 
-  if (payload.source_event_id !== undefined && payload.source_event_id !== null) {
-    const eventId = valueAsString(payload.source_event_id);
-    if (!eventId || !isMeridianId(eventId)) {
-      return { ok: false, error: "source_event_id_invalid" };
+  const sourceEventId = valueAsString(payload.source_event_id);
+  if (!sourceEventId || !isMeridianId(sourceEventId)) {
+    return { ok: false, error: "source_event_id_required" };
+  }
+
+  const matchStatus = valueAsString(payload.match_status) ?? "new_visitor";
+  if (!matchStatuses.has(matchStatus)) {
+    return { ok: false, error: "match_status_invalid" };
+  }
+
+  if (payload.matched_person_id !== undefined && payload.matched_person_id !== null) {
+    const matchedPersonId = valueAsString(payload.matched_person_id);
+    if (!matchedPersonId || !isMeridianId(matchedPersonId)) {
+      return { ok: false, error: "matched_person_id_invalid" };
     }
   }
 
@@ -213,19 +214,21 @@ function validatePayload(payload: EnrollmentPayload): { ok: true } | { ok: false
     return { ok: false, error: "face_embedding_nonce_required" };
   }
 
-  const embeddingAlgorithm = valueAsString(payload.face_embedding_algorithm);
-  if (!embeddingAlgorithm || !cryptoAlgorithms.has(embeddingAlgorithm)) {
+  const encodingAlgorithm = valueAsString(payload.face_embedding_algorithm);
+  if (!encodingAlgorithm || !cryptoAlgorithms.has(encodingAlgorithm)) {
     return { ok: false, error: "face_embedding_algorithm_invalid" };
   }
 
-  const dimensions = payload.face_embedding_dimensions;
-  if (typeof dimensions !== "number" || !Number.isInteger(dimensions) || dimensions <= 0 || dimensions > 4096) {
-    return { ok: false, error: "face_embedding_dimensions_invalid" };
+  if (payload.face_embedding_dimensions !== undefined && payload.face_embedding_dimensions !== null) {
+    const dimensions = payload.face_embedding_dimensions;
+    if (typeof dimensions !== "number" || !Number.isInteger(dimensions) || dimensions <= 0 || dimensions > 4096) {
+      return { ok: false, error: "face_embedding_dimensions_invalid" };
+    }
   }
 
   if (payload.face_embedding_model !== undefined && payload.face_embedding_model !== null) {
     const model = valueAsString(payload.face_embedding_model);
-    if (!model || model.length > 80) {
+    if (!model || model.length > 120) {
       return { ok: false, error: "face_embedding_model_invalid" };
     }
   }
@@ -237,86 +240,64 @@ function validatePayload(payload: EnrollmentPayload): { ok: true } | { ok: false
     }
   }
 
-  if (payload.snapshot_ref !== undefined && payload.snapshot_ref !== null) {
-    const snapshotRef = valueAsString(payload.snapshot_ref);
-    if (!snapshotRef || snapshotRef.length > 512) {
-      return { ok: false, error: "snapshot_ref_invalid" };
-    }
+  if (payload.face_location !== undefined && payload.face_location !== null && typeof payload.face_location !== "object") {
+    return { ok: false, error: "face_location_invalid" };
   }
 
   if (payload.metadata !== undefined && !isPlainObject(payload.metadata)) {
     return { ok: false, error: "metadata_invalid" };
   }
 
-  const snapshotPath = valueAsString(payload.encrypted_snapshot_path);
-  if (!snapshotPath) {
+  const faceImagePath = valueAsString(payload.encrypted_face_image_path);
+  if (!faceImagePath) {
     return { ok: true };
   }
 
-  if (!snapshotPath.startsWith(`${facilityId}/`) || snapshotPath.includes("..") || !snapshotPath.endsWith(".bin")) {
-    return { ok: false, error: "encrypted_snapshot_path_invalid" };
+  if (!faceImagePath.startsWith(`${facilityId}/`) || faceImagePath.includes("..") || !faceImagePath.endsWith(".bin")) {
+    return { ok: false, error: "encrypted_face_image_path_invalid" };
   }
 
-  const sha256 = valueAsString(payload.snapshot_sha256);
+  const sha256 = valueAsString(payload.face_image_sha256);
   if (!sha256 || !/^[a-f0-9]{64}$/.test(sha256)) {
-    return { ok: false, error: "snapshot_sha256_invalid" };
+    return { ok: false, error: "face_image_sha256_invalid" };
   }
 
-  if (!valueAsString(payload.snapshot_key_id)) {
-    return { ok: false, error: "snapshot_key_id_required" };
+  if (!valueAsString(payload.face_image_key_id)) {
+    return { ok: false, error: "face_image_key_id_required" };
   }
 
-  if (!valueAsString(payload.snapshot_nonce)) {
-    return { ok: false, error: "snapshot_nonce_required" };
+  if (!valueAsString(payload.face_image_nonce)) {
+    return { ok: false, error: "face_image_nonce_required" };
   }
 
-  const snapshotAlgorithm = valueAsString(payload.snapshot_algorithm);
-  if (!snapshotAlgorithm || !cryptoAlgorithms.has(snapshotAlgorithm)) {
-    return { ok: false, error: "snapshot_algorithm_invalid" };
+  const faceImageAlgorithm = valueAsString(payload.face_image_algorithm);
+  if (!faceImageAlgorithm || !cryptoAlgorithms.has(faceImageAlgorithm)) {
+    return { ok: false, error: "face_image_algorithm_invalid" };
   }
 
-  if (payload.snapshot_expires_at !== undefined && payload.snapshot_expires_at !== null) {
-    const expiresAt = valueAsString(payload.snapshot_expires_at);
+  if (payload.face_image_expires_at !== undefined && payload.face_image_expires_at !== null) {
+    const expiresAt = valueAsString(payload.face_image_expires_at);
     if (!expiresAt || Number.isNaN(Date.parse(expiresAt))) {
-      return { ok: false, error: "snapshot_expires_at_invalid" };
+      return { ok: false, error: "face_image_expires_at_invalid" };
     }
   }
 
   return { ok: true };
 }
 
-async function findExistingEnrollment(
+async function findExistingVisitorFaceObservation(
   supabaseUrl: string,
   serviceKey: string,
-  facilityId: string,
-  sourceEventId: string | null,
-  embeddingDigest: string,
+  sourceEventId: string,
 ): Promise<{ id?: string; error?: string }> {
-  if (sourceEventId) {
-    const bySource = await selectExistingEnrollment(supabaseUrl, serviceKey, {
-      facility_id: `eq.${facilityId}`,
-      source_event_id: `eq.${sourceEventId}`,
-    });
-    if (bySource.error || bySource.id) {
-      return bySource;
-    }
-  }
-
-  return await selectExistingEnrollment(supabaseUrl, serviceKey, {
-    facility_id: `eq.${facilityId}`,
-    face_embedding_digest: `eq.${embeddingDigest}`,
-    status: "eq.pending",
+  const params = new URLSearchParams({
+    select: "id",
+    source_event_id: `eq.${sourceEventId}`,
+    limit: "1",
   });
-}
 
-async function selectExistingEnrollment(
-  supabaseUrl: string,
-  serviceKey: string,
-  filters: Record<string, string>,
-): Promise<{ id?: string; error?: string }> {
-  const params = new URLSearchParams({ select: "id", limit: "1", ...filters });
   const response = await fetch(
-    `${supabaseUrl.replace(/\/$/, "")}/rest/v1/pending_person_enrollments?${params.toString()}`,
+    `${supabaseUrl.replace(/\/$/, "")}/rest/v1/visitor_face_observations?${params.toString()}`,
     {
       headers: {
         "apikey": serviceKey,
@@ -326,8 +307,8 @@ async function selectExistingEnrollment(
   );
 
   if (!response.ok) {
-    console.error("pending enrollment lookup failed", response.status, await response.text());
-    return { error: "pending_enrollment_lookup_failed" };
+    console.error("visitor face observation lookup failed", response.status, await response.text());
+    return { error: "visitor_face_observation_lookup_failed" };
   }
 
   const rows = await response.json() as Array<{ id?: string }>;

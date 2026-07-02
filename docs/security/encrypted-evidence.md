@@ -25,15 +25,16 @@ The attacker should still receive only ciphertext for resident imagery unless th
 
 Supabase should not store plaintext images, plaintext clips, data encryption keys, or key-wrapping secrets.
 
-## Biometric Embeddings
+## Visitor Face Encodings
 
-Face embeddings are biometric data. For unknown-person enrollment, the Hub or a facility-controlled key service must encrypt the ArcFace embedding before calling `ingest-unknown-person`. Supabase stores only:
+Face embeddings are biometric data. For visitor/new-person detection, the Hub or a facility-controlled key service must encrypt the 512-dimensional InsightFace/ArcFace embedding before calling `ingest-visitor-face`. Supabase stores only:
 
 - `face_embedding_ciphertext`.
-- `face_embedding_digest`, used for dedupe without exposing the raw vector.
-- `face_embedding_key_id`, nonce, algorithm, model name, dimension count, quality score, expiry metadata, and pending review status.
+- `face_embedding_digest`, used for integrity and facility-controlled matching references without exposing the raw embedding.
+- `face_embedding_key_id`, nonce, algorithm, model name, dimension count, quality score, expiry metadata, and match status.
+- Optional encrypted face image object metadata in the private `visitor-face-evidence` bucket.
 
-The plaintext embedding must not be sent to Supabase, stored in JSONB/vector columns, logs, object storage, analytics tools, or app telemetry. Approval or merge into a recognized person is blocked until an owner/admin links the pending row to a person with active `face_recognition` consent.
+The plaintext embedding, face crop, and visitor image must not be sent to Supabase, stored in JSONB/vector columns, logs, object storage, analytics tools, or app telemetry. New-person detection is an observation log, not a pending enrollment queue.
 
 ## "Cannot Be Decrypted" Rule
 

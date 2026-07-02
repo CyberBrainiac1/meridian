@@ -18,7 +18,7 @@ Meridian is a local-first senior-care monitoring prototype. The repo currently c
 
 The repo is still in prototype setup. The docs and benchmark work are the source of truth, and the Hub now has an initial tested core pipeline for capture, scheduling, pose estimation, tracking, fall/long-lie classification, validation, event generation, offline queueing, and device health.
 
-Supabase setup is scaffolded in the repo but must be linked to a real Supabase project before migrations and functions can be deployed. See `docs/supabase-setup.md` and `docs/security/biometric-enrollment.md`.
+Supabase setup is scaffolded in the repo but must be linked to a real Supabase project before migrations and functions can be deployed. See `docs/supabase-setup.md` and `docs/security/encrypted-visitor-faces.md`.
 
 ## Safety Notes
 
