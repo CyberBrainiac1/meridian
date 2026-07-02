@@ -16,6 +16,18 @@ This session already benchmarked the Raspberry Pi 4B extensively as a Hub candid
 
 Everything in this doc is being built now — the point of "implement ALL features" is a comprehensive POC, not a P0-only slice. Within that, the fall/long-lie/validation/event-engine/offline-queue path is the safety-critical core and gets built and tested first; dementia-safety, risk trends, night-rounds, visitor logging, and medication-visit verification follow, since they share the same tracked-person/feature-window foundation.
 
+## 2.1 Real-time guarantee (non-negotiable for safety-critical events)
+
+Every safety-critical event type (`fall_confirmed`, `fall_suspected`, `long_lie`, `wandering`, `exit_risk`, `possible_distress`) must be emitted **the instant it's detected** — nothing in the Hub pipeline is allowed to batch, schedule, or delay these. This is already how the architecture is built, worth stating explicitly so it stays true as code gets written:
+
+- The fall state machine fires `CONFIRMED` immediately on crossing its thresholds — no cloud round-trip, no waiting on anything external (section 4.6/4.12).
+- `LocalHeuristicValidator` runs synchronously, in-process, in well under a second — it's a second local compute pass, not a queued job.
+- The offline queue's retry/backoff (section 4.14) only activates *on delivery failure* — the first delivery attempt happens immediately on event creation, every time. Retry logic exists for resilience against a dropped connection, not as a normal-path delay.
+- Event-engine cooldown/dedup (section 4.13) suppresses **repeat notifications of an already-open incident** (so a sustained fall doesn't spam ten alerts a minute) — it must never delay the *first* alert for a new incident. This distinction gets its own unit test.
+- **Daily family summaries (PRD §8.6) are explicitly not a Hub concern.** The Hub only ever emits raw, immediate events; any daily/periodic aggregation into a "Maggie had a good day" summary happens downstream in Dhairya's backend, not here. There is no batching anywhere in this codebase.
+
+**Model choice is deliberately lightweight for this reason.** `yolo11s-pose` (section 4.4) is the second-smallest model in its family, chosen specifically so the detection path stays fast — but "should be fast" isn't good enough given what this feature is for. `tools/benchmark_pose_gpu.py` (section 5) measures real p50/p95/max inference latency on this exact GPU before any resolution/model-size default is locked in, same discipline as the Pi 4B benchmarking earlier this session. The end-to-end target carried from the PRD: **staged fall detected in under 5 seconds, alert emitted in under 15 seconds** — and given everything above runs local and synchronous with no network round-trip in the critical path, the realistic budget is far tighter than that ceiling, not right up against it.
+
 ## 3. Architecture
 
 ```
@@ -157,3 +169,4 @@ No auth, RBAC enforcement, multi-tenant database/row-level security, resident/ca
 - Real ESP32-CAM hardware (2x HiLetgo units, ordered but not yet in hand) — `camera_source.py`'s interface is designed for a straightforward swap once they arrive, but that swap itself is future work.
 - GPU inference benchmark numbers (section 5's `benchmark_pose_gpu.py`) — to be run for real once the DirectML provider is installed and verified, not assumed.
 - Real recorded fall/activity footage for the validation dataset (PRD §28.1's list of required scenarios) — still a team task.
+- Supabase/backend setup, when the team is ready to build the real ingestion service this Hub's mock backend stands in for — the user noted this can be delegated to the Codex rescue subagent rather than built inline here, consistent with staying out of Dhairya's ownership area for this POC.
