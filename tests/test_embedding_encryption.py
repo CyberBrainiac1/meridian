@@ -62,8 +62,25 @@ def test_rejects_non_32_byte_key():
 
 def test_from_env_raises_clear_error_when_key_missing(monkeypatch):
     monkeypatch.delenv("VISITOR_EMBEDDING_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("VISITOR_EMBEDDING_KEY_ID", raising=False)
     with pytest.raises(RuntimeError, match="VISITOR_EMBEDDING_ENCRYPTION_KEY"):
-        EmbeddingEncryptor.from_env()
+        EmbeddingEncryptor.from_env(env_file=None)
+
+
+def test_from_env_loads_local_env_file(monkeypatch, tmp_path):
+    monkeypatch.delenv("VISITOR_EMBEDDING_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("VISITOR_EMBEDDING_KEY_ID", raising=False)
+    key = base64.b64encode(os.urandom(32)).decode("ascii")
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        f"VISITOR_EMBEDDING_ENCRYPTION_KEY={key}\nVISITOR_EMBEDDING_KEY_ID=file-key\n",
+        encoding="utf-8",
+    )
+
+    encryptor = EmbeddingEncryptor.from_env(env_file=env_file)
+    encrypted = encryptor.encrypt([0.1, 0.2])
+
+    assert encrypted.key_id == "file-key"
 
 
 def test_image_encrypt_then_decrypt_round_trips():

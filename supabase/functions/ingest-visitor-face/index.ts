@@ -41,10 +41,7 @@ Deno.serve(async (request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("MERIDIAN_SUPABASE_SERVICE_ROLE_KEY") ??
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
-    Deno.env.get("SUPABASE_SECRET_KEY") ??
-    Deno.env.get("SUPABASE_SECRET_KEYS");
+  const serviceKey = getServiceKey();
 
   if (!supabaseUrl || !serviceKey) {
     return jsonResponse({ error: "server_not_configured" }, 500);
@@ -325,6 +322,28 @@ function isMeridianId(value: string): boolean {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getServiceKey(): string | null {
+  const explicit = Deno.env.get("MERIDIAN_SUPABASE_SERVICE_ROLE_KEY") ??
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+    Deno.env.get("SUPABASE_SECRET_KEY");
+  if (explicit) {
+    return explicit;
+  }
+
+  const secretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (!secretKeys) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(secretKeys) as Record<string, unknown>;
+    const defaultKey = parsed.default;
+    return typeof defaultKey === "string" && defaultKey.length > 0 ? defaultKey : null;
+  } catch {
+    return secretKeys;
+  }
 }
 
 function getJwtSubject(authorization: string | null): string | null {

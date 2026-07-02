@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import os
+from pathlib import Path
 from dataclasses import dataclass
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -65,12 +66,14 @@ class EmbeddingEncryptor:
     def from_env(
         cls, env_var: str = "VISITOR_EMBEDDING_ENCRYPTION_KEY",
         key_id_env_var: str = "VISITOR_EMBEDDING_KEY_ID",
+        env_file: str | os.PathLike[str] | None = ".env",
     ) -> "EmbeddingEncryptor":
-        key_b64 = os.environ.get(env_var)
+        env_file_values = _read_env_file(env_file) if env_file is not None else {}
+        key_b64 = os.environ.get(env_var) or env_file_values.get(env_var)
         if not key_b64:
             raise RuntimeError(f"{env_var} is not set -- cannot encrypt visitor face data without a key")
         key = base64.b64decode(key_b64)
-        key_id = os.environ.get(key_id_env_var, "hub-default")
+        key_id = os.environ.get(key_id_env_var) or env_file_values.get(key_id_env_var) or "hub-default"
         return cls(key=key, key_id=key_id)
 
     def _encrypt_bytes(self, plaintext: bytes) -> EncryptedBlob:
@@ -115,3 +118,21 @@ class EmbeddingEncryptor:
     def decrypt_image(self, encrypted: EncryptedImage) -> bytes:
         """Local-only utility, same caveat as decrypt()."""
         return self._decrypt_bytes(encrypted.ciphertext, encrypted.nonce)
+
+
+def _read_env_file(env_file: str | os.PathLike[str]) -> dict[str, str]:
+    path = Path(env_file)
+    if not path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        values[key] = value.strip().strip('"').strip("'")
+    return values

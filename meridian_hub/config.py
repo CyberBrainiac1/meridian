@@ -22,6 +22,20 @@ class Settings(BaseSettings):
     queue_db_path: str = "data/queue.sqlite3"
     registry_db_path: str = "data/camera_registry.sqlite3"
     mock_backend_url: str = "http://localhost:8000"
+    supabase_project_ref: str | None = None
+    supabase_url: str | None = None
+    supabase_access_token: str | None = None
+    supabase_db_host: str | None = None
+    supabase_db_port: int = 5432
+    supabase_db_name: str = "postgres"
+    supabase_db_user: str = "postgres"
+    supabase_db_password: str | None = None
+    supabase_db_url: str | None = None
+    supabase_publishable_key: str | None = None
+    supabase_anon_key: str | None = None
+    supabase_secret_key: str | None = None
+    supabase_service_role_key: str | None = None
+    meridian_supabase_service_role_key: str | None = None
 
     @field_validator("camera_sources", mode="before")
     @classmethod
