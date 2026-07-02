@@ -1,0 +1,12 @@
+# Tunable against real recorded test clips without touching state-machine
+# logic (PRD section 28.1's staged-event validation protocol).
+
+VELOCITY_CANDIDATE_THRESHOLD = 120.0  # px/sec downward, triggers FALL_CANDIDATE
+ANGLE_CANDIDATE_THRESHOLD_DEGREES = 30.0
+
+VELOCITY_CONFIRM_THRESHOLD = 200.0
+ANGLE_CONFIRM_THRESHOLD_DEGREES = 55.0
+ASPECT_RATIO_HORIZONTAL_THRESHOLD = 1.2
+STILLNESS_CONFIRM_SECONDS = 2.0
+
+CANDIDATE_WINDOW_SECONDS = 3.0
