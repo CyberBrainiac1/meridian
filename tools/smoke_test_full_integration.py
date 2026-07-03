@@ -175,7 +175,7 @@ class _ScriptedEstimator:
         return next(self._seq)
 
 
-def chain2_fall_to_alert(send, to_number):
+def chain2_fall_to_alert():
     print("\n=== CHAIN 2: fall detected -> event -> alert copy -> app notification delivery ===")
     registry = CameraRegistry(db_path=":memory:")
     registry.register(CameraRecord(
