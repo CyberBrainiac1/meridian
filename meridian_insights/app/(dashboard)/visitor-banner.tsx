@@ -48,7 +48,7 @@ export function VisitorBanner({ facilityId }: { facilityId: string }) {
         type="button"
         onClick={() => setDismissed(latest.id)}
         aria-label="Dismiss"
-        className="rounded-full p-1.5 text-[var(--color-foreground)]/50 hover:bg-[var(--color-primary)]/10 focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
+        className="rounded-full p-1.5 text-[var(--color-foreground-muted)] hover:bg-[var(--color-primary)]/10 focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]"
       >
         <X size={16} aria-hidden="true" />
       </button>

@@ -33,7 +33,7 @@ export function BulletChart({
       <div className="flex items-baseline justify-between gap-2 mb-1">
         <div>
           <p className="font-semibold text-sm">{label}</p>
-          <p className="text-xs text-[var(--color-foreground)]/60">{sublabel}</p>
+          <p className="text-xs text-[var(--color-foreground-muted)]">{sublabel}</p>
         </div>
         <p
           className={`text-lg font-semibold tabular-nums ${
@@ -79,7 +79,7 @@ export function BulletChart({
         <div className="h-4 rounded-full bg-[var(--color-muted)] mt-2 skeleton-shimmer" />
       )}
 
-      <div className="flex items-center justify-between mt-1.5 text-[11px] text-[var(--color-foreground)]/50">
+      <div className="flex items-center justify-between mt-1.5 text-[11px] text-[var(--color-foreground-muted)]">
         <span>Target: {formatSeconds(TARGET_SECONDS)}</span>
         <span>{incidentCount} incident{incidentCount === 1 ? "" : "s"}</span>
       </div>

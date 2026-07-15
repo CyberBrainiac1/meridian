@@ -74,7 +74,7 @@ export function IncidentActions({
             onClick={() => act(status)}
             className={`rounded-[var(--radius-control)] px-4 py-2.5 text-sm font-medium transition-colors duration-200 ease-in-out disabled:opacity-60 min-h-11 ${
               status === "resolved"
-                ? "bg-[var(--color-success)] text-white hover:bg-[var(--color-success)]/90"
+                ? "bg-[var(--color-success-strong)] text-white hover:bg-[var(--color-success-strong)]/90"
                 : status === "escalated"
                   ? "bg-[var(--color-destructive)] text-white hover:bg-[var(--color-destructive)]/90"
                   : "border border-[var(--color-border)] bg-white hover:bg-[var(--color-muted)]"

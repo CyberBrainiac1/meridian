@@ -16,7 +16,7 @@ struct LoginView: View {
                         .foregroundStyle(MeridianColor.foreground)
                     Text("Sign in to see live alerts for your facility.")
                         .font(MeridianFont.body(15))
-                        .foregroundStyle(MeridianColor.foreground.opacity(0.7))
+                        .foregroundStyle(MeridianColor.foregroundMuted)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.top, MeridianSpacing.xl)

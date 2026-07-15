@@ -23,12 +23,12 @@ struct DailySummaryView: View {
                                         .foregroundStyle(MeridianColor.foreground)
                                     Text(Date.now.formatted(date: .abbreviated, time: .omitted))
                                         .font(.footnote)
-                                        .foregroundStyle(MeridianColor.foreground.opacity(0.6))
+                                        .foregroundStyle(MeridianColor.foregroundMuted)
                                 }
                             }
                             Text(summary.detailLine)
                                 .font(MeridianFont.body(16))
-                                .foregroundStyle(MeridianColor.foreground.opacity(0.85))
+                                .foregroundStyle(MeridianColor.foregroundMuted)
 
                             if !summary.todayIncidents.isEmpty {
                                 Divider().padding(.vertical, MeridianSpacing.unit)
@@ -41,7 +41,7 @@ struct DailySummaryView: View {
                                                 .padding(.top, 6)
                                             Text(incident.summary ?? incident.eventType.label)
                                                 .font(MeridianFont.body(14))
-                                                .foregroundStyle(MeridianColor.foreground.opacity(0.8))
+                                                .foregroundStyle(MeridianColor.foregroundMuted)
                                         }
                                     }
                                 }

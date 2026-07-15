@@ -28,7 +28,7 @@ export default async function IncidentsPage({
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">Incident reports</h1>
-          <p className="text-sm text-[var(--color-foreground)]/70 mt-1">
+          <p className="text-sm text-[var(--color-foreground-muted)] mt-1">
             {session.facilityName} · compliance and liability documentation, {incidents.length} incident
             {incidents.length === 1 ? "" : "s"}
           </p>
@@ -41,7 +41,7 @@ export default async function IncidentsPage({
       <div className="soft-card overflow-x-auto print:shadow-none print:border-0">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left border-b border-[var(--color-border)] text-[var(--color-foreground)]/60">
+            <tr className="text-left border-b border-[var(--color-border)] text-[var(--color-foreground-muted)]">
               <th className="px-4 py-3 font-medium">Resident</th>
               <th className="px-4 py-3 font-medium">Event</th>
               <th className="px-4 py-3 font-medium">Severity</th>
@@ -76,7 +76,7 @@ export default async function IncidentsPage({
                 <td className="px-4 py-3 font-[family-name:var(--font-fira-code)] text-xs whitespace-nowrap">
                   {formatDate(incident.detected_at)} {formatClockTime(incident.detected_at)}
                 </td>
-                <td className="px-4 py-3 max-w-xs text-[var(--color-foreground)]/70">
+                <td className="px-4 py-3 max-w-xs text-[var(--color-foreground-muted)]">
                   {incident.resolution_note ?? "—"}
                 </td>
               </tr>
@@ -85,7 +85,7 @@ export default async function IncidentsPage({
         </table>
 
         {incidents.length === 0 && (
-          <p className="p-8 text-center text-sm text-[var(--color-foreground)]/60">
+          <p className="p-8 text-center text-sm text-[var(--color-foreground-muted)]">
             No incidents match these filters.
           </p>
         )}

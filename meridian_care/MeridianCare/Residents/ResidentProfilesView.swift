@@ -19,7 +19,7 @@ struct ResidentProfilesView: View {
                                 .font(MeridianFont.bodyMedium(17))
                             Text(resident.roomId ?? "Room unassigned")
                                 .font(.footnote)
-                                .foregroundStyle(MeridianColor.foreground.opacity(0.6))
+                                .foregroundStyle(MeridianColor.foregroundMuted)
                             if !resident.riskFlags.isEmpty {
                                 HStack(spacing: MeridianSpacing.unit) {
                                     ForEach(resident.riskFlags, id: \.self) { flag in
@@ -33,7 +33,7 @@ struct ResidentProfilesView: View {
                             if let notes = resident.careNotes {
                                 Text(notes)
                                     .font(.footnote)
-                                    .foregroundStyle(MeridianColor.foreground.opacity(0.7))
+                                    .foregroundStyle(MeridianColor.foregroundMuted)
                                     .padding(.top, 2)
                             }
                         }

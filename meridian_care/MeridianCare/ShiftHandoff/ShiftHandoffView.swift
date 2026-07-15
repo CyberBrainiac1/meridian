@@ -26,7 +26,7 @@ struct ShiftHandoffView: View {
                                             .font(MeridianFont.body(15))
                                         Text("\(line.status.label) · \(MeridianFormat.clockTime(line.detectedAt))")
                                             .font(.caption)
-                                            .foregroundStyle(MeridianColor.foreground.opacity(0.6))
+                                            .foregroundStyle(MeridianColor.foregroundMuted)
                                     }
                                     Spacer()
                                 }

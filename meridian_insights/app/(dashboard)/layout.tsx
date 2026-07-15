@@ -16,7 +16,7 @@ export default async function DashboardLayout({
       <aside className="no-print w-64 shrink-0 border-r border-[var(--color-border)] bg-white/60 p-4 flex flex-col">
         <div className="px-1 mb-6">
           <p className="text-lg font-semibold text-[var(--color-foreground)]">Meridian</p>
-          <p className="text-xs text-[var(--color-foreground)]/60">Insights</p>
+          <p className="text-xs text-[var(--color-foreground-muted)]">Insights</p>
         </div>
 
         <Nav />
@@ -24,7 +24,7 @@ export default async function DashboardLayout({
         <div className="mt-auto pt-4 border-t border-[var(--color-border)] space-y-2">
           <div className="px-1">
             <p className="text-sm font-medium truncate">{session.facilityName}</p>
-            <p className="text-xs text-[var(--color-foreground)]/60 truncate">
+            <p className="text-xs text-[var(--color-foreground-muted)] truncate">
               {session.email} · {session.role}
             </p>
           </div>

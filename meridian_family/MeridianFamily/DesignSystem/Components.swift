@@ -7,7 +7,9 @@ struct MeridianButtonStyle: ButtonStyle {
     private var background: Color {
         switch kind {
         case .primary: return MeridianColor.primary
-        case .success: return MeridianColor.success
+        // White text on the base success color measured 3.77:1 (below
+        // the 4.5:1 minimum) — successStrong is the accessible fill.
+        case .success: return MeridianColor.successStrong
         case .secondary: return MeridianColor.surface
         }
     }

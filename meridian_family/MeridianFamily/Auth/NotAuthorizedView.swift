@@ -13,7 +13,7 @@ struct NotAuthorizedView: View {
                 .multilineTextAlignment(.center)
             Text("Ask your facility's care team to add you as a family contact. If you work at the facility, use Meridian Care instead.")
                 .font(MeridianFont.body(15))
-                .foregroundStyle(MeridianColor.foreground.opacity(0.7))
+                .foregroundStyle(MeridianColor.foregroundMuted)
                 .multilineTextAlignment(.center)
             Button("Sign out") {
                 Task { await auth.signOut() }

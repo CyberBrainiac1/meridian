@@ -9,7 +9,7 @@ export default function LoginPage() {
           <h1 className="text-2xl font-semibold text-[var(--color-foreground)]">
             Meridian Insights
           </h1>
-          <p className="mt-1 text-sm text-[var(--color-foreground)]/70">
+          <p className="mt-1 text-sm text-[var(--color-foreground-muted)]">
             Sign in to your facility dashboard.
           </p>
         </div>

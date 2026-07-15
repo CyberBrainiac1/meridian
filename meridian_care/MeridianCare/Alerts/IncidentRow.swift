@@ -11,14 +11,14 @@ struct IncidentRow: View {
                 Spacer()
                 Text(MeridianFormat.relativeTime(incident.detectedAt))
                     .font(.footnote)
-                    .foregroundStyle(MeridianColor.foreground.opacity(0.6))
+                    .foregroundStyle(MeridianColor.foregroundMuted)
             }
             Text(copy)
                 .font(MeridianFont.bodyMedium(17))
                 .foregroundStyle(MeridianColor.foreground)
             Text(incident.status.label)
                 .font(.footnote)
-                .foregroundStyle(MeridianColor.foreground.opacity(0.6))
+                .foregroundStyle(MeridianColor.foregroundMuted)
         }
         .padding(.vertical, MeridianSpacing.xs)
         .contentShape(Rectangle())

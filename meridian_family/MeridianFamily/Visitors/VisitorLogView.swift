@@ -22,7 +22,7 @@ struct VisitorLogView: View {
                     if viewModel.visitors.isEmpty {
                         Text("No visitor activity recorded yet. This shows up once your facility enables visitor visibility for your family link.")
                             .font(MeridianFont.body(15))
-                            .foregroundStyle(MeridianColor.foreground.opacity(0.6))
+                            .foregroundStyle(MeridianColor.foregroundMuted)
                             .padding(.top, MeridianSpacing.sm)
                     } else {
                         VStack(alignment: .leading, spacing: MeridianSpacing.sm) {

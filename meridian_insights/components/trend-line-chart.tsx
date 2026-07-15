@@ -75,7 +75,7 @@ export function TrendLineChart({ data }: { data: WeeklyPoint[] }) {
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-xs font-[family-name:var(--font-fira-code)]">
           <thead>
-            <tr className="text-left text-[var(--color-foreground)]/60">
+            <tr className="text-left text-[var(--color-foreground-muted)]">
               <th className="pr-4 py-1 font-medium">Week</th>
               {SERIES.map((s) => (
                 <th key={s.type} className="pr-4 py-1 font-medium">

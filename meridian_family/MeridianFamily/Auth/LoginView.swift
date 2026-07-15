@@ -20,7 +20,7 @@ struct LoginView: View {
                         .foregroundStyle(MeridianColor.foreground)
                     Text("Stay close, from anywhere.")
                         .font(MeridianFont.body(15))
-                        .foregroundStyle(MeridianColor.foreground.opacity(0.7))
+                        .foregroundStyle(MeridianColor.foregroundMuted)
                 }
                 .padding(.top, MeridianSpacing.xl)
 

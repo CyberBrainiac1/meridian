@@ -177,7 +177,7 @@ export function SkeletonCanvas() {
         </span>
       </div>
 
-      <div className="absolute bottom-6 left-6 right-6 flex items-end justify-between font-mono text-xs text-slate-500">
+      <div className="absolute bottom-6 left-6 right-6 flex items-end justify-between font-mono text-xs text-slate-400">
         <p>NO VIDEO TRANSMITTED — SKELETON DATA ONLY</p>
         <p>ws://{RELAY_URL.replace(/^wss?:\/\//, "")}</p>
       </div>

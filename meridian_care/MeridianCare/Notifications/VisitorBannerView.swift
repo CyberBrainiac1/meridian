@@ -17,7 +17,7 @@ struct VisitorBannerView: View {
                     viewModel.dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .foregroundStyle(MeridianColor.foreground.opacity(0.5))
+                        .foregroundStyle(MeridianColor.foregroundMuted)
                 }
                 .frame(minWidth: MeridianTouchTarget.minSize, minHeight: MeridianTouchTarget.minSize)
                 .accessibilityLabel("Dismiss")

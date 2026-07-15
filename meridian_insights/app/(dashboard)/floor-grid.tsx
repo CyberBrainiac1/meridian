@@ -58,7 +58,7 @@ export function FloorGrid({
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2 text-xs text-[var(--color-foreground)]/60">
+      <div className="mb-4 flex items-center gap-2 text-xs text-[var(--color-foreground-muted)]">
         <span
           className={`h-2 w-2 rounded-full ${connected ? "bg-[var(--color-success)]" : "bg-[var(--color-warning)]"}`}
           aria-hidden="true"
@@ -67,7 +67,7 @@ export function FloorGrid({
       </div>
 
       {rows.length === 0 ? (
-        <div className="soft-card p-8 text-center text-sm text-[var(--color-foreground)]/60">
+        <div className="soft-card p-8 text-center text-sm text-[var(--color-foreground-muted)]">
           No residents are set up for this facility yet.
         </div>
       ) : (
@@ -86,7 +86,7 @@ export function FloorGrid({
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
                     <p className="font-semibold truncate">{row.display_name}</p>
-                    <p className="text-xs text-[var(--color-foreground)]/60">
+                    <p className="text-xs text-[var(--color-foreground-muted)]">
                       {row.room_id ?? "Room unassigned"}
                     </p>
                   </div>
@@ -99,13 +99,13 @@ export function FloorGrid({
                       {row.open_incident_type && formatEventType(row.open_incident_type)}
                     </p>
                     {row.open_incident_detected_at && (
-                      <p className="text-xs text-[var(--color-foreground)]/60 mt-0.5">
+                      <p className="text-xs text-[var(--color-foreground-muted)] mt-0.5">
                         {formatRelativeTime(row.open_incident_detected_at)}
                       </p>
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm text-[var(--color-foreground)]/60">No open incidents</p>
+                  <p className="text-sm text-[var(--color-foreground-muted)]">No open incidents</p>
                 )}
 
                 {row.risk_flags.length > 0 && (
@@ -113,7 +113,7 @@ export function FloorGrid({
                     {row.risk_flags.map((flag) => (
                       <span
                         key={flag}
-                        className="rounded-full bg-[var(--color-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-foreground)]/70"
+                        className="rounded-full bg-[var(--color-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-foreground-muted)]"
                       >
                         {flag.replace(/_/g, " ")}
                       </span>

@@ -32,7 +32,7 @@ export default async function ResidentDetailPage({
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">{profile.display_name}</h1>
-          <p className="text-sm text-[var(--color-foreground)]/70 mt-1">
+          <p className="text-sm text-[var(--color-foreground-muted)] mt-1">
             {profile.room_id ?? "Room unassigned"}
           </p>
         </div>
@@ -41,7 +41,7 @@ export default async function ResidentDetailPage({
             {profile.risk_flags.map((flag) => (
               <span
                 key={flag}
-                className="rounded-full bg-[var(--color-muted)] px-2.5 py-1 text-xs font-medium text-[var(--color-foreground)]/70"
+                className="rounded-full bg-[var(--color-muted)] px-2.5 py-1 text-xs font-medium text-[var(--color-foreground-muted)]"
               >
                 {flag.replace(/_/g, " ")}
               </span>
@@ -53,13 +53,13 @@ export default async function ResidentDetailPage({
       {profile.care_notes && (
         <div className="soft-card p-4 mb-6 text-sm">
           <p className="font-medium mb-1">Care notes</p>
-          <p className="text-[var(--color-foreground)]/70">{profile.care_notes}</p>
+          <p className="text-[var(--color-foreground-muted)]">{profile.care_notes}</p>
         </div>
       )}
 
       <section className="soft-card p-4 mb-6">
         <h2 className="font-semibold mb-1">Incident frequency by week</h2>
-        <p className="text-xs text-[var(--color-foreground)]/60 mb-4">
+        <p className="text-xs text-[var(--color-foreground-muted)] mb-4">
           Detection history, not a predictive score — fall/long-lie/inactivity events over the last 8 weeks.
         </p>
         <TrendLineChart data={trend} />
@@ -68,7 +68,7 @@ export default async function ResidentDetailPage({
       <section className="soft-card p-4">
         <h2 className="font-semibold mb-4">Full incident history</h2>
         {activity.length === 0 ? (
-          <p className="text-sm text-[var(--color-foreground)]/60">No incidents recorded for this resident.</p>
+          <p className="text-sm text-[var(--color-foreground-muted)]">No incidents recorded for this resident.</p>
         ) : (
           <div className="divide-y divide-[var(--color-border)]">
             {activity.map((incident) => (
@@ -78,11 +78,11 @@ export default async function ResidentDetailPage({
                     <SeverityBadge severity={incident.severity} />
                     <p className="font-medium text-sm">{formatEventType(incident.event_type)}</p>
                   </div>
-                  <p className="text-xs text-[var(--color-foreground)]/60">
+                  <p className="text-xs text-[var(--color-foreground-muted)]">
                     {formatStatus(incident.status)} · {formatRelativeTime(incident.detected_at)}
                   </p>
                   {incident.resolution_note && (
-                    <p className="text-xs text-[var(--color-foreground)]/70 mt-1 max-w-md">
+                    <p className="text-xs text-[var(--color-foreground-muted)] mt-1 max-w-md">
                       {incident.resolution_note}
                     </p>
                   )}

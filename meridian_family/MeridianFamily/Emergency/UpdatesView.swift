@@ -63,7 +63,7 @@ private struct UpdateRow: View {
                     .foregroundStyle(MeridianColor.foreground)
                 Text(notification.createdAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
-                    .foregroundStyle(MeridianColor.foreground.opacity(0.5))
+                    .foregroundStyle(MeridianColor.foregroundMuted)
             }
         }
         .padding(.vertical, MeridianSpacing.unit)

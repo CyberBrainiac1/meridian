@@ -29,12 +29,12 @@ export default async function IncidentDetailPage({
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
           <SeverityBadge severity={incident.severity} />
-          <span className="text-xs text-[var(--color-foreground)]/60">{formatStatus(incident.status)}</span>
+          <span className="text-xs text-[var(--color-foreground-muted)]">{formatStatus(incident.status)}</span>
         </div>
         <h1 className="text-2xl font-semibold">
           {incident.summary ?? formatEventType(incident.event_type)}
         </h1>
-        <p className="text-sm text-[var(--color-foreground)]/70 mt-1">
+        <p className="text-sm text-[var(--color-foreground-muted)] mt-1">
           {formatDate(incident.detected_at)} at {formatClockTime(incident.detected_at)}
           {resident && (
             <>
@@ -49,21 +49,21 @@ export default async function IncidentDetailPage({
 
       <div className="soft-card p-4 mb-4 grid grid-cols-2 gap-4 text-sm">
         <div>
-          <p className="text-xs text-[var(--color-foreground)]/60 mb-0.5">Event type</p>
+          <p className="text-xs text-[var(--color-foreground-muted)] mb-0.5">Event type</p>
           <p className="font-medium">{formatEventType(incident.event_type)}</p>
         </div>
         <div>
-          <p className="text-xs text-[var(--color-foreground)]/60 mb-0.5">Confidence</p>
+          <p className="text-xs text-[var(--color-foreground-muted)] mb-0.5">Confidence</p>
           <p className="font-medium">
             {incident.confidence !== null ? `${Math.round(incident.confidence * 100)}%` : "—"}
           </p>
         </div>
         <div>
-          <p className="text-xs text-[var(--color-foreground)]/60 mb-0.5">Room</p>
+          <p className="text-xs text-[var(--color-foreground-muted)] mb-0.5">Room</p>
           <p className="font-medium">{incident.room_id ?? "—"}</p>
         </div>
         <div>
-          <p className="text-xs text-[var(--color-foreground)]/60 mb-0.5">Reason codes</p>
+          <p className="text-xs text-[var(--color-foreground-muted)] mb-0.5">Reason codes</p>
           <p className="font-medium">
             {incident.reason_codes.length > 0 ? incident.reason_codes.join(", ") : "—"}
           </p>
@@ -72,7 +72,7 @@ export default async function IncidentDetailPage({
 
       {incident.resolution_note && (
         <div className="soft-card p-4 mb-4 text-sm">
-          <p className="text-xs text-[var(--color-foreground)]/60 mb-1">Resolution note</p>
+          <p className="text-xs text-[var(--color-foreground-muted)] mb-1">Resolution note</p>
           <p>{incident.resolution_note}</p>
         </div>
       )}

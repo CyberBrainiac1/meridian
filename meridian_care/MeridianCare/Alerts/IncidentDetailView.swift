@@ -20,7 +20,7 @@ struct IncidentDetailView: View {
                         .foregroundStyle(MeridianColor.foreground)
                     Text("\(incident.eventType.label) · \(MeridianFormat.relativeTime(incident.detectedAt))")
                         .font(.footnote)
-                        .foregroundStyle(MeridianColor.foreground.opacity(0.6))
+                        .foregroundStyle(MeridianColor.foregroundMuted)
                 }
 
                 if let resolutionNote = incident.resolutionNote {

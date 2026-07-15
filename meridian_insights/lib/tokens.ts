@@ -13,6 +13,14 @@ export const colors = {
   border: "#E0F2FE",
   background: "#F0F9FF",
   surface: "#FFFFFF",
+  /** Secondary/caption text — a solid color, not `foreground` at reduced
+   *  opacity (that measured 2.55-4.25:1, below the 4.5:1 minimum). */
+  foregroundMuted: "#2F5D77",
+  /** Severity-badge text / success button fill — the base severity colors
+   *  fail contrast as text-on-own-tint or as a white-text button fill. */
+  successStrong: "#047857",
+  warningStrong: "#92400E",
+  destructiveStrong: "#991B1B",
 } as const;
 
 export const severityColor: Record<"info" | "warning" | "critical", string> = {

@@ -3,11 +3,23 @@ import SwiftUI
 struct SeverityBadge: View {
     let severity: IncidentSeverity
 
-    private var color: Color {
+    /// Background tint uses the base severity color; text uses the
+    /// *Strong variant. The base color as both text and its own 12% tint
+    /// background measured 3.25-4.39:1 (below the 4.5:1 minimum) for
+    /// warning/critical — see Tokens.swift's accessibility-pass note.
+    private var tintColor: Color {
         switch severity {
         case .info: return MeridianColor.primary
         case .warning: return MeridianColor.warning
         case .critical: return MeridianColor.destructive
+        }
+    }
+
+    private var textColor: Color {
+        switch severity {
+        case .info: return MeridianColor.primary
+        case .warning: return MeridianColor.warningStrong
+        case .critical: return MeridianColor.destructiveStrong
         }
     }
 
@@ -22,10 +34,10 @@ struct SeverityBadge: View {
     var body: some View {
         Label(severity.label, systemImage: systemImage)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(color)
+            .foregroundStyle(textColor)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(color.opacity(0.12), in: Capsule())
+            .background(tintColor.opacity(0.12), in: Capsule())
             .accessibilityLabel(severity.label)
     }
 }
@@ -43,7 +55,9 @@ struct MeridianButtonStyle: ButtonStyle {
         switch kind {
         case .primary: return MeridianColor.primary
         case .destructive: return MeridianColor.destructive
-        case .success: return MeridianColor.success
+        // White text on the base success color measured 3.77:1 (below
+        // the 4.5:1 minimum) — successStrong is the accessible fill.
+        case .success: return MeridianColor.successStrong
         case .secondary: return MeridianColor.surface
         }
     }

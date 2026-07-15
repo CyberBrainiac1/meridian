@@ -21,13 +21,13 @@ export default async function AnalyticsPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Response-time analytics</h1>
-        <p className="text-sm text-[var(--color-foreground)]/70 mt-1">
+        <p className="text-sm text-[var(--color-foreground-muted)] mt-1">
           Average time from alert detected to caregiver acknowledgment, by shift.
         </p>
       </div>
 
       {metrics.length === 0 ? (
-        <div className="soft-card p-8 text-center text-sm text-[var(--color-foreground)]/60">
+        <div className="soft-card p-8 text-center text-sm text-[var(--color-foreground-muted)]">
           No shifts have been recorded yet.
         </div>
       ) : (

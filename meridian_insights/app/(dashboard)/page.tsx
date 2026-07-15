@@ -14,7 +14,7 @@ export default async function FloorStatusPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Live floor status</h1>
-        <p className="text-sm text-[var(--color-foreground)]/70 mt-1">
+        <p className="text-sm text-[var(--color-foreground-muted)] mt-1">
           One card per resident, updating live as incidents are detected and resolved.
         </p>
       </div>

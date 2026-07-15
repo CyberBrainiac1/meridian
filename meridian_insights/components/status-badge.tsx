@@ -9,17 +9,17 @@ const ROOM_STATUS_CONFIG: Record<
   normal: {
     label: "Normal",
     icon: CheckCircle2,
-    className: "bg-[var(--color-success)]/10 text-[var(--color-success)]",
+    className: "bg-[var(--color-success)]/10 text-[var(--color-success-strong)]",
   },
   alert: {
     label: "Alert",
     icon: OctagonAlert,
-    className: "bg-[var(--color-destructive)]/10 text-[var(--color-destructive)]",
+    className: "bg-[var(--color-destructive)]/10 text-[var(--color-destructive-strong)]",
   },
   offline: {
     label: "Offline",
     icon: WifiOff,
-    className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)]",
+    className: "bg-[var(--color-warning)]/10 text-[var(--color-warning-strong)]",
   },
 };
 
@@ -47,12 +47,12 @@ const SEVERITY_CONFIG: Record<
   warning: {
     label: "Needs attention",
     icon: AlertTriangle,
-    className: "bg-[var(--color-warning)]/10 text-[var(--color-warning)]",
+    className: "bg-[var(--color-warning)]/10 text-[var(--color-warning-strong)]",
   },
   critical: {
     label: "Emergency",
     icon: OctagonAlert,
-    className: "bg-[var(--color-destructive)]/10 text-[var(--color-destructive)]",
+    className: "bg-[var(--color-destructive)]/10 text-[var(--color-destructive-strong)]",
   },
 };
 

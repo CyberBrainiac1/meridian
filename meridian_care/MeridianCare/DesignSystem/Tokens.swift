@@ -17,6 +17,20 @@ enum MeridianColor {
     static let surface = Color.white
     static let onPrimary = Color.white
     static let onDestructive = Color.white
+
+    /// Accessibility pass: secondary/caption text used to be `foreground`
+    /// at 50-70% opacity, which measured 2.55-4.25:1 against these
+    /// backgrounds (computed via the WCAG relative-luminance formula) —
+    /// below the 4.5:1 minimum. This solid color clears 4.5:1 everywhere
+    /// (mostly 5-7:1). Severity-badge text used its own color at ~12%
+    /// tint as background, which failed for warning/destructive/success;
+    /// the *Strong variants are the accessible replacement for that text,
+    /// and successStrong doubles as the success button-fill color (white
+    /// text on raw success measured 3.77:1, also below minimum).
+    static let foregroundMuted = Color(hex: 0x2F5D77)
+    static let successStrong = Color(hex: 0x047857)
+    static let warningStrong = Color(hex: 0x92400E)
+    static let destructiveStrong = Color(hex: 0x991B1B)
 }
 
 enum MeridianRadius {
