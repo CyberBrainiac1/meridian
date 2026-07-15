@@ -40,13 +40,13 @@ on conflict do nothing;
 -- Replace these three UUIDs with real auth.users ids before running.
 insert into public.facility_members (facility_id, user_id, role)
 values
-    ('fac-demo-001', '00000000-0000-0000-0000-000000000001', 'owner'),
-    ('fac-demo-001', '00000000-0000-0000-0000-000000000002', 'caregiver'),
-    ('fac-demo-001', '00000000-0000-0000-0000-000000000003', 'family')
+    ('fac-demo-001', 'd5828847-7b8d-4f9f-b961-d299ed1cf155', 'owner'),
+    ('fac-demo-001', 'e5f941cb-0d11-4c0f-88c0-04d4a6edd59e', 'caregiver'),
+    ('fac-demo-001', '42ad0705-9089-426c-b478-44e109b3d29e', 'family')
 on conflict (facility_id, user_id) do update set role = excluded.role;
 
 insert into public.family_member_links (facility_id, user_id, resident_id)
-values ('fac-demo-001', '00000000-0000-0000-0000-000000000003', 'person-maggie')
+values ('fac-demo-001', '42ad0705-9089-426c-b478-44e109b3d29e', 'person-maggie')
 on conflict (user_id, resident_id) do nothing;
 
 -- Sample incidents across lifecycle states so the demo has real data to
@@ -80,9 +80,9 @@ on conflict (source_event_id) do nothing;
 -- an app write path).
 update public.incident_events
 set status = 'resolved',
-    acknowledged_by = '00000000-0000-0000-0000-000000000002',
+    acknowledged_by = 'e5f941cb-0d11-4c0f-88c0-04d4a6edd59e',
     acknowledged_at = detected_at + interval '90 seconds',
-    resolved_by = '00000000-0000-0000-0000-000000000002',
+    resolved_by = 'e5f941cb-0d11-4c0f-88c0-04d4a6edd59e',
     resolved_at = detected_at + interval '5 minutes',
     resolution_note = 'Staff reached her in 90 seconds. Assisted back to bed, no injury.'
 where source_event_id = 'demo-evt-resolved-1';
