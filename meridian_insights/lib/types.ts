@@ -1,6 +1,7 @@
-// Hand-mirrored from supabase/migrations/*.sql. If you change a table or
-// view's shape in a migration, update the matching type here in the same
-// commit — this file (not the raw SQL) is what the app code should import.
+// Hand-mirrored from meridian_software/shared/types.ts, which is itself
+// hand-mirrored from supabase/migrations/*.sql. This app's build root can't
+// import across the repo boundary, so this copy must stay in sync with the
+// canonical file in the same commit whenever the schema changes.
 
 export type FacilityRole = "owner" | "admin" | "caregiver" | "viewer" | "family";
 
@@ -139,8 +140,7 @@ export interface RespondToIncidentArgs {
     p_note?: string | null;
 }
 
-/** public.cameras — joined client-side for display_name/location_label lookups
- *  (e.g. visitor timeline "New visitor detected at Main Entrance" copy). */
+/** public.cameras — joined client-side for display_name/location_label lookups. */
 export interface CameraRow {
     id: string;
     facility_id: string;
@@ -151,8 +151,7 @@ export interface CameraRow {
     last_seen_at: string | null;
 }
 
-/** public.incident_events — raw row. Care-team surfaces only (Insights, Care);
- *  the family role has no select policy on this table, use family_incident_feed. */
+/** public.incident_events — raw row, care-team surfaces only (never family). */
 export interface IncidentEventRow {
     id: string;
     source_event_id: string;

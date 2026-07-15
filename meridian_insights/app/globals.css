@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens mirrored from meridian_software/design-tokens/tokens.json
+ * (the canonical source shared across Insights, Care, and Family). Keep in
+ * sync with that file and with the Swift Tokens.swift mirrors in the same
+ * commit whenever a value changes.
+ */
+:root {
+  --color-primary: #0369a1;
+  --color-primary-alt: #0891b2;
+  --color-success: #059669;
+  --color-warning: #b45309;
+  --color-destructive: #dc2626;
+  --color-foreground: #0c4a6e;
+  --color-muted: #e7eff5;
+  --color-border: #e0f2fe;
+  --color-background: #f0f9ff;
+  --color-surface: #ffffff;
+  --color-on-primary: #ffffff;
+  --color-on-destructive: #ffffff;
+
+  --radius-card: 16px;
+  --radius-control: 10px;
+
+  --shadow-soft: 0 1px 2px rgba(12, 74, 110, 0.04), 0 8px 24px rgba(12, 74, 110, 0.08);
+  --shadow-soft-hover: 0 2px 4px rgba(12, 74, 110, 0.06), 0 12px 32px rgba(12, 74, 110, 0.12);
+
+  --motion-duration: 200ms;
+  --motion-easing: ease-in-out;
+}
+
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-primary-alt: var(--color-primary-alt);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-destructive: var(--color-destructive);
+  --color-foreground: var(--color-foreground);
+  --color-muted: var(--color-muted);
+  --color-border: var(--color-border);
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --font-heading: var(--font-figtree);
+  --font-body: var(--font-noto-sans);
+  --font-mono-data: var(--font-fira-code);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading), system-ui, sans-serif;
+}
+
+/* Visible focus states everywhere — never suppressed. */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.soft-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--color-border);
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--color-muted) 25%, #f4f9fc 37%, var(--color-muted) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* Calm/emergency two-state principle: alerts get one arrival pop, then hold
+   steady. No continuous flashing or pulsing, ever. */
+@keyframes alert-arrive {
+  0% { transform: scale(0.96); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.alert-arrive {
+  animation: alert-arrive var(--motion-duration) var(--motion-easing) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
