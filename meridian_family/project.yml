@@ -1,0 +1,46 @@
+name: MeridianFamily
+options:
+  bundleIdPrefix: com.meridianfamily.app
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: 2.29.0
+targets:
+  MeridianFamily:
+    type: application
+    platform: iOS
+    sources:
+      - path: MeridianFamily
+    resources:
+      - path: MeridianFamily/Resources
+    info:
+      path: MeridianFamily/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        MERIDIAN_SUPABASE_URL: $(MERIDIAN_SUPABASE_URL)
+        MERIDIAN_SUPABASE_ANON_KEY: $(MERIDIAN_SUPABASE_ANON_KEY)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.meridianfamily.app
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configFiles:
+        Debug: Config/Secrets.xcconfig
+        Release: Config/Secrets.xcconfig
+    dependencies:
+      - package: Supabase
+        product: Supabase
+schemes:
+  MeridianFamily:
+    build:
+      targets:
+        MeridianFamily: all
+    run:
+      config: Debug

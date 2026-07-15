@@ -116,6 +116,17 @@ export interface VisitorObservationTimelineRow {
     body_description_generated_at: string | null;
 }
 
+/** public.family_linked_residents — name-only projection for the Family
+ *  app's daily-summary copy ("Maggie had a good day"). Added because
+ *  family_incident_feed/family_visitor_feed/notifications carry
+ *  resident_id but no display name, and family has no RLS access to
+ *  people/resident_profiles. See
+ *  supabase/migrations/20260703000300_family_linked_resident_names.sql. */
+export interface FamilyLinkedResidentRow {
+    resident_id: string;
+    display_name: string;
+}
+
 /** public.notifications — audit trail of what a family was told and when. */
 export interface NotificationRow {
     id: string;
