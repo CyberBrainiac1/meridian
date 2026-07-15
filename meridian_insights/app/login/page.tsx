@@ -1,4 +1,5 @@
 import { LoginForm } from "./login-form";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export default function LoginPage() {
   return (
@@ -13,6 +14,12 @@ export default function LoginPage() {
           </p>
         </div>
         <LoginForm />
+        {!isSupabaseConfigured && (
+          <p className="mt-4 text-center text-xs text-[var(--color-warning)]">
+            No Supabase project is configured yet (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY
+            are unset). See frontendguytodo.md.
+          </p>
+        )}
       </div>
     </main>
   );

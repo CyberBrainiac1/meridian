@@ -29,7 +29,7 @@ class HubDaemon:
 
     def __init__(
         self, pose_estimator, event_engine: EventEngine, queue_store: QueueStore,
-        camera_registry: CameraRegistry,
+        camera_registry: CameraRegistry, demo_relay=None,
     ):
         self._pose_estimator = pose_estimator
         self._event_engine = event_engine
@@ -39,12 +39,19 @@ class HubDaemon:
         self._trackers: dict[str, IouTracker] = {}
         self._feature_managers: dict[str, TrackFeatureManager] = {}
         self._fall_machines: dict[tuple[str, int], FallStateMachine] = {}
+        # Optional, pitch-demo-only: broadcasts raw pose keypoints to a
+        # local WebSocket client (see demo_relay.py). None by default --
+        # zero effect on detection/classification either way.
+        self._demo_relay = demo_relay
 
     def process_frame(self, camera_id: str, frame: np.ndarray, timestamp: float) -> list[MeridianEvent]:
         preprocessed = preprocess_frame(
             frame, self._pose_estimator.input_height, self._pose_estimator.input_width
         )
         detections = self._pose_estimator.estimate(preprocessed, timestamp)
+
+        if self._demo_relay is not None:
+            self._demo_relay.broadcast(camera_id, detections, timestamp)
 
         tracker = self._trackers.setdefault(camera_id, IouTracker())
         tracked = tracker.update(detections)

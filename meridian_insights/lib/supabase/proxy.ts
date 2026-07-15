@@ -13,6 +13,26 @@ const PUBLIC_ROUTES = ["/login", "/demo"];
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  const path = request.nextUrl.pathname;
+  const isPublicRoute = PUBLIC_ROUTES.some((route) => path.startsWith(route));
+
+  // No live Supabase project configured yet (see frontendguytodo.md) —
+  // createServerClient throws on an empty URL/key, which would otherwise
+  // 500 every route including /login. Public routes render their own
+  // "not configured" state; protected routes still redirect to /login so
+  // the app is navigable end-to-end before a project exists.
+  const isConfigured = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+  if (!isConfigured) {
+    if (!isPublicRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -35,9 +55,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const path = request.nextUrl.pathname;
-  const isPublicRoute = PUBLIC_ROUTES.some((route) => path.startsWith(route));
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
