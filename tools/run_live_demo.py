@@ -59,9 +59,14 @@ def main():
     print(f"{DIM}Pose model ready on: {estimator.active_provider}{RESET}")
 
     relay = DemoPoseRelay(host="127.0.0.1", port=args.relay_port)
-    relay.start()
-    print(f"{GREEN}Skeleton relay live at ws://localhost:{args.relay_port}/ws/pose{RESET}")
-    print(f"{DIM}Open the Insights /demo/skeleton page now to see the live skeleton.{RESET}")
+    if relay.start():
+        print(f"{GREEN}Skeleton relay live at ws://localhost:{args.relay_port}/ws/pose{RESET}")
+        print(f"{DIM}Open the Insights /demo/skeleton page now to see the live skeleton.{RESET}")
+    else:
+        print(f"{BANNER}  SKELETON RELAY DID NOT START  {RESET}")
+        print(f"{DIM}  Port {args.relay_port} is likely still held by a previous run. The fall")
+        print(f"  detection below still works, but the live skeleton view will be blank.")
+        print(f"  Fix: close any old demo terminal, or run with --relay-port 8766, and retry.{RESET}")
 
     registry = CameraRegistry(db_path=":memory:")
     registry.register(CameraRecord(
@@ -110,7 +115,10 @@ def main():
             n_tracked = len(daemon._trackers["cam-demo"]._active) if "cam-demo" in daemon._trackers else 0
             if n_tracked and not people_seen:
                 people_seen = True
-                print(f"{GREEN}Person detected -- skeleton is now streaming to the demo page.{RESET}")
+                if relay.is_serving():
+                    print(f"{GREEN}Person detected -- skeleton is now streaming to the demo page.{RESET}")
+                else:
+                    print(f"{DIM}Person detected (skeleton relay is down -- see warning above).{RESET}")
 
             for event in events:
                 if event.event_type == "fall_confirmed":

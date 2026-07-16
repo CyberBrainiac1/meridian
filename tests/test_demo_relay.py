@@ -31,3 +31,36 @@ def test_broadcast_is_noop_without_clients():
     # Relay never started -- broadcast() must not raise, just do nothing.
     relay = DemoPoseRelay()
     relay.broadcast("cam-demo", [_detection()], 1.0)
+
+
+def test_relay_starts_and_reports_serving():
+    relay = DemoPoseRelay(port=8811)
+    try:
+        assert relay.start() is True
+        assert relay.is_serving() is True
+    finally:
+        relay.stop()
+
+
+def test_relay_releases_port_on_stop_so_it_can_restart():
+    # The demo-critical case: Ctrl+C then re-run must not hit a bind error.
+    r1 = DemoPoseRelay(port=8812)
+    assert r1.start() is True
+    r1.stop()
+    r2 = DemoPoseRelay(port=8812)
+    try:
+        assert r2.start() is True, "port was not released on stop -- restart would fail on stage"
+    finally:
+        r2.stop()
+
+
+def test_relay_reports_false_when_port_already_in_use():
+    held = DemoPoseRelay(port=8813)
+    assert held.start() is True
+    second = DemoPoseRelay(port=8813)
+    try:
+        assert second.start(wait_seconds=2.0) is False
+        assert second.is_serving() is False
+    finally:
+        second.stop()
+        held.stop()

@@ -33,10 +33,23 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from meridian_hub.vision.pose_types import KEYPOINT_NAMES, PersonDetection
+
+
+def _port_in_use(host: str, port: int) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((host, port))
+            return False
+        except OSError:
+            return True
 
 
 def _serialize(camera_id: str, timestamp: float, detections: list[PersonDetection]) -> dict:
@@ -70,6 +83,7 @@ class DemoPoseRelay:
         self._clients: set[WebSocket] = set()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
+        self._server = None  # uvicorn.Server, kept so stop() can shut it down cleanly
 
         @self._app.websocket("/ws/pose")
         async def pose_ws(websocket: WebSocket):
@@ -85,9 +99,21 @@ class DemoPoseRelay:
             finally:
                 self._clients.discard(websocket)
 
-    def start(self) -> None:
+    def start(self, wait_seconds: float = 5.0) -> bool:
+        """Start the WebSocket server. Returns True once it's actually
+        serving, False if it failed to come up within wait_seconds (almost
+        always: the port is already in use from a prior run). Callers
+        should check the return value and surface a clear message instead
+        of assuming the skeleton view is live -- a silently-dead relay is
+        worse than a loud failure on stage."""
         if self._thread is not None:
-            return
+            return self.is_serving()
+
+        # Pre-flight: if the port is already taken, fail cleanly and
+        # immediately instead of letting uvicorn's background thread throw
+        # a bind traceback across the demo terminal.
+        if _port_in_use(self._host, self._port):
+            return False
 
         ready = threading.Event()
 
@@ -104,13 +130,39 @@ class DemoPoseRelay:
 
         import uvicorn
 
-        config = uvicorn.Config(self._app, host=self._host, port=self._port, log_level="warning", loop="asyncio")
-        server = uvicorn.Server(config)
-        asyncio.run_coroutine_threadsafe(server.serve(), self._loop)
+        config = uvicorn.Config(self._app, host=self._host, port=self._port, log_level="error", loop="asyncio")
+        self._server = uvicorn.Server(config)
+        asyncio.run_coroutine_threadsafe(self._server.serve(), self._loop)
+
+        # Poll until uvicorn reports it's actually serving, or a startup
+        # error terminates it (e.g. the port is taken).
+        deadline = time.monotonic() + wait_seconds
+        while time.monotonic() < deadline:
+            if getattr(self._server, "started", False):
+                return True
+            if getattr(self._server, "should_exit", False):
+                break
+            time.sleep(0.05)
+        return self.is_serving()
+
+    def is_serving(self) -> bool:
+        return bool(self._server is not None and getattr(self._server, "started", False))
 
     def stop(self) -> None:
+        """Cleanly release the port so the relay can be restarted (e.g.
+        Ctrl+C then re-run the demo) without a 'port already in use' bind
+        failure on the next start."""
+        if self._server is not None:
+            # Tell uvicorn to shut down; it closes the listening socket.
+            self._server.should_exit = True
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline and getattr(self._server, "started", False):
+                time.sleep(0.05)
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._thread is not None:
+            self._thread.join(timeout=3.0)
+        self._server = None
         self._thread = None
         self._loop = None
 
