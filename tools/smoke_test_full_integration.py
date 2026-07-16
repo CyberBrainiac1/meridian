@@ -101,12 +101,16 @@ def chain1_visitor(face_video):
     body_description_model = None
     body_description_generated_at = None
     if os.environ.get("HACKCLUB_AI_API_KEY"):
-        body_result = HackClubVisionDescriber.from_settings().describe_person_photo(person_photo_bytes)
-        body_description = body_result.description
-        body_description_model = body_result.model
-        body_description_generated_at = body_result.generated_at
-        print(f"      Hack Club body description: \"{body_description}\"")
-        check("Hack Club vision generated a body/clothing description", bool(body_description))
+        # Best-effort: a vision outage/402 must not fail the visitor path.
+        body_result = HackClubVisionDescriber.from_settings().try_describe_person_photo(person_photo_bytes)
+        if body_result is not None:
+            body_description = body_result.description
+            body_description_model = body_result.model
+            body_description_generated_at = body_result.generated_at
+            print(f"      Hack Club body description: \"{body_description}\"")
+            check("Hack Club vision generated a body/clothing description", bool(body_description))
+        else:
+            print("      (Hack Club vision unavailable -- degraded gracefully, visitor path still works)")
     else:
         print("      (Hack Club vision skipped -- HACKCLUB_AI_API_KEY is not set)")
 

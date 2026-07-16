@@ -66,3 +66,20 @@ def test_describer_http_error_hides_api_key():
 
     assert "429" in str(exc_info.value)
     assert "sk-secret-value" not in str(exc_info.value)
+
+
+def test_try_describe_returns_none_on_failure_instead_of_raising():
+    # A 402/exhausted-quota (or any failure) must degrade gracefully so the
+    # visitor notification path stays up when the vision API is unavailable.
+    describer = HackClubVisionDescriber(
+        api_key="sk-test",
+        session=_FakeSession(_FakeResponse(status_code=402)),
+    )
+    assert describer.try_describe_person_photo(b"fake-jpeg") is None
+
+
+def test_try_describe_returns_result_on_success():
+    describer = HackClubVisionDescriber(api_key="sk-test", session=_FakeSession())
+    result = describer.try_describe_person_photo(b"fake-jpeg")
+    assert result is not None
+    assert "red jacket" in result.description

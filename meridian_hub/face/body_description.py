@@ -1,4 +1,5 @@
 import base64
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -7,6 +8,8 @@ from typing import Any
 import requests
 
 from meridian_hub.config import Settings
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_PROMPT = (
     "Describe the visible full body and clothing of the unknown visitor in one "
@@ -117,6 +120,27 @@ class HackClubVisionDescriber:
             model=self._model,
             generated_at=datetime.now(timezone.utc),
         )
+
+    def try_describe_person_photo(
+        self,
+        image_bytes: bytes,
+        *,
+        content_type: str = "image/jpeg",
+        prompt: str = DEFAULT_PROMPT,
+    ) -> BodyDescriptionResult | None:
+        """Best-effort wrapper for the live pipeline: the AI clothing/body
+        description is an enrichment on top of the visitor notification,
+        never a dependency of it. If the vision API is down, exhausted
+        (HTTP 402), rate-limited, or slow, this returns None and logs a
+        warning instead of raising -- so a visitor arrival is still logged
+        and still notifies caregivers (with the encrypted embedding,
+        encrypted photo, and age/gender description) even when the vision
+        service is unavailable. Demos and production both stay up."""
+        try:
+            return self.describe_person_photo(image_bytes, content_type=content_type, prompt=prompt)
+        except Exception as exc:
+            logger.warning("Visitor body description unavailable, continuing without it: %s", exc)
+            return None
 
 
 def _clean_description(value: str) -> str:

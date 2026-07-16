@@ -51,3 +51,47 @@ def test_confirmed_path_never_requires_any_io():
     source = inspect.getsource(FallStateMachine.update)
     for banned in ("requests", "socket", "sqlite3", "open("):
         assert banned not in source
+
+
+def _confirm_a_fall(machine, t0=0.0):
+    machine.update(_features(velocity=0.0, angle=5.0, aspect_ratio=0.4), timestamp=t0)
+    machine.update(_features(velocity=250.0, angle=70.0, aspect_ratio=1.8, stillness=0.0), timestamp=t0 + 0.5)
+    event = machine.update(_features(velocity=0.0, angle=75.0, aspect_ratio=1.8, stillness=2.1), timestamp=t0 + 2.6)
+    assert event is not None and event.state == FallState.CONFIRMED
+
+
+def test_rearms_after_confirmed_when_person_gets_back_on_feet():
+    machine = FallStateMachine(track_id=1)
+    _confirm_a_fall(machine, t0=0.0)
+    assert machine.state == FallState.CONFIRMED
+
+    # still on the floor -> stays CONFIRMED, no new event (no alert spam)
+    assert machine.update(_features(velocity=0.0, angle=75.0, aspect_ratio=1.8, stillness=3.0), timestamp=4.0) is None
+    assert machine.state == FallState.CONFIRMED
+
+    # back on their feet -> CLEARED + returns to NORMAL (re-armed)
+    cleared = machine.update(_features(velocity=-10.0, angle=6.0, aspect_ratio=0.4, stillness=0.0), timestamp=6.0)
+    assert cleared is not None and cleared.state == FallState.CLEARED
+    assert machine.state == FallState.NORMAL
+
+
+def test_second_fall_is_detected_after_recovery():
+    machine = FallStateMachine(track_id=1)
+    _confirm_a_fall(machine, t0=0.0)
+    machine.update(_features(velocity=-10.0, angle=6.0, aspect_ratio=0.4, stillness=0.0), timestamp=6.0)  # recover
+    assert machine.state == FallState.NORMAL
+
+    # a genuinely separate second fall must confirm again, not stay silent
+    _confirm_a_fall(machine, t0=10.0)
+    assert machine.state == FallState.CONFIRMED
+
+
+def test_suspected_also_rearms_on_recovery():
+    machine = FallStateMachine(track_id=1)
+    machine.update(_features(velocity=0.0, angle=5.0, aspect_ratio=0.4), timestamp=0.0)
+    machine.update(_features(velocity=140.0, angle=40.0, aspect_ratio=0.9, stillness=0.0), timestamp=0.5)
+    machine.update(_features(velocity=5.0, angle=42.0, aspect_ratio=0.9, stillness=0.6), timestamp=1.5)
+    assert machine.state == FallState.SUSPECTED
+    cleared = machine.update(_features(velocity=0.0, angle=5.0, aspect_ratio=0.4, stillness=0.0), timestamp=4.0)
+    assert cleared is not None and cleared.state == FallState.CLEARED
+    assert machine.state == FallState.NORMAL
