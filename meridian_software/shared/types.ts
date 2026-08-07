@@ -185,3 +185,37 @@ export interface IncidentEventRow {
     resolved_at: string | null;
     resolution_note: string | null;
 }
+
+export type AssistanceRequestKind = "assistance" | "family_contact" | "emergency";
+export type AssistanceRequestSource = "resident_hub" | "auto_fall_dispatch";
+export type AssistanceRequestStatus = "open" | "acknowledged" | "en_route" | "resolved" | "cancelled";
+export type AssistanceEtaConfidence = "data_derived" | "limited_history" | "facility_default";
+
+/** public.resident_hub_assistance_feed — room-device-safe help status. */
+export interface ResidentHubAssistanceRow {
+    id: string;
+    request_kind: AssistanceRequestKind;
+    source: AssistanceRequestSource;
+    status: AssistanceRequestStatus;
+    requested_at: string;
+    acknowledged_at: string | null;
+    en_route_at: string | null;
+    resolved_at: string | null;
+    cancelled_at: string | null;
+    eta_seconds: number;
+    eta_confidence: AssistanceEtaConfidence;
+}
+
+/** public.resident_hub_visitor_prompt_feed — deliberately excludes all
+ * encrypted biometric/image/key material from the resident device. */
+export interface ResidentHubVisitorPromptRow {
+    id: string;
+    status: "pending" | "approved" | "denied" | "no_response";
+    prompted_at: string;
+    expires_at: string;
+    answered_at: string | null;
+    escalation_notified_at: string | null;
+    camera_id: string | null;
+    body_description: string | null;
+    detected_at: string;
+}

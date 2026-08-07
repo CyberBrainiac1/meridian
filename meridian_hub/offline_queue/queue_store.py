@@ -71,3 +71,7 @@ class QueueStore:
             (retry_count, now + backoff, item_id),
         )
         self._conn.commit()
+
+    def close(self) -> None:
+        """Release the SQLite handle for orderly process/test shutdown."""
+        self._conn.close()

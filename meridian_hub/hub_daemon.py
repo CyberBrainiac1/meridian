@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import time
 
 import numpy as np
 
@@ -8,6 +9,7 @@ from meridian_hub.classifiers.fall_types import FallState
 from meridian_hub.events.event_engine import EventEngine
 from meridian_hub.events.schemas import MeridianEvent
 from meridian_hub.features.feature_window import TrackFeatureManager
+from meridian_hub.ingestion.hub_delivery import HubDeliveryQueue
 from meridian_hub.offline_queue.queue_store import QueueStore
 from meridian_hub.validation.local_validator import LocalHeuristicValidator, ValidationOutcome
 from meridian_hub.vision.preprocessing import preprocess_frame
@@ -29,11 +31,12 @@ class HubDaemon:
 
     def __init__(
         self, pose_estimator, event_engine: EventEngine, queue_store: QueueStore,
-        camera_registry: CameraRegistry, demo_relay=None,
+        camera_registry: CameraRegistry, demo_relay=None, stage_observer=None,
     ):
         self._pose_estimator = pose_estimator
         self._event_engine = event_engine
         self._queue_store = queue_store
+        self._delivery_queue = HubDeliveryQueue(queue_store)
         self._camera_registry = camera_registry
         self._validator = LocalHeuristicValidator()
         self._trackers: dict[str, IouTracker] = {}
@@ -43,18 +46,32 @@ class HubDaemon:
         # local WebSocket client (see demo_relay.py). None by default --
         # zero effect on detection/classification either way.
         self._demo_relay = demo_relay
+        # Measurement-only hook. It deliberately receives durations, never a frame
+        # or pose payload, so observability cannot become a second data-retention
+        # path. Production callers leave it as None.
+        self._stage_observer = stage_observer
+
+    def _observe(self, stage: str, started_ns: int | None) -> None:
+        if started_ns is not None and self._stage_observer is not None:
+            self._stage_observer(stage, (time.perf_counter_ns() - started_ns) / 1_000_000)
 
     def process_frame(self, camera_id: str, frame: np.ndarray, timestamp: float) -> list[MeridianEvent]:
+        started = time.perf_counter_ns() if self._stage_observer is not None else None
         preprocessed = preprocess_frame(
             frame, self._pose_estimator.input_height, self._pose_estimator.input_width
         )
+        self._observe("preprocess", started)
+        started = time.perf_counter_ns() if self._stage_observer is not None else None
         detections = self._pose_estimator.estimate(preprocessed, timestamp)
+        self._observe("inference", started)
 
         if self._demo_relay is not None:
             self._demo_relay.broadcast(camera_id, detections, timestamp)
 
+        started = time.perf_counter_ns() if self._stage_observer is not None else None
         tracker = self._trackers.setdefault(camera_id, IouTracker())
         tracked = tracker.update(detections)
+        self._observe("track", started)
 
         feature_manager = self._feature_managers.setdefault(camera_id, TrackFeatureManager())
         feature_manager.prune({t.track_id for t in tracked})
@@ -63,15 +80,18 @@ class HubDaemon:
         events: list[MeridianEvent] = []
 
         for person in tracked:
+            started = time.perf_counter_ns() if self._stage_observer is not None else None
             feature_manager.update(person.track_id, person.detection)
             features = feature_manager.compute(person.track_id)
 
             key = (camera_id, person.track_id)
             machine = self._fall_machines.setdefault(key, FallStateMachine(track_id=person.track_id))
             fall_event = machine.update(features, timestamp)
+            self._observe("features_state", started)
             if fall_event is None:
                 continue
 
+            started = time.perf_counter_ns() if self._stage_observer is not None else None
             if fall_event.state == FallState.CONFIRMED:
                 event = self._emit(camera_record, camera_id, person.track_id, "fall_confirmed", "critical", 0.9, timestamp, CONFIRMED_REASON_CODES)
             elif fall_event.state == FallState.SUSPECTED:
@@ -82,10 +102,16 @@ class HubDaemon:
                 event = None
             else:
                 event = None
+            self._observe("event_emit", started)
 
             if event is not None:
                 events.append(event)
-                self._queue_store.enqueue(payload=event.model_dump(mode="json"), idempotency_key=event.event_id)
+                started = time.perf_counter_ns() if self._stage_observer is not None else None
+                # A confirmed fall remains durable until ingest-event returns
+                # 2xx. The backend's confirmed-fall trigger then creates the
+                # idempotent auto_fall_dispatch assistance request.
+                self._delivery_queue.enqueue_incident(event, now=timestamp)
+                self._observe("queue_enqueue", started)
 
         return events
 

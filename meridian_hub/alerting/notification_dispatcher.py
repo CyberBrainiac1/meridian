@@ -1,8 +1,9 @@
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from meridian_hub.offline_queue.queue_store import QueueStore
+from meridian_hub.ingestion.hub_delivery import unwrap_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,14 @@ class NotificationDispatcher:
         auth_header: dict[str, str] | None = None,
         post_fn: Callable[[str, dict, dict], "HttpResponse"] | None = None,
         timeout_seconds: float = 5.0,
+        delivery_urls: Mapping[str, str] | None = None,
     ):
         self._queue = queue_store
         self._ingest_url = ingest_url
         self._auth_header = auth_header or {}
         self._timeout = timeout_seconds
         self._post_fn = post_fn or self._default_post_fn
+        self._delivery_urls = dict(delivery_urls or {})
 
     def _default_post_fn(self, url: str, json_body: dict, headers: dict):
         import requests
@@ -58,7 +61,14 @@ class NotificationDispatcher:
         results: list[DeliveryResult] = []
         for item in self._queue.pending(now=now):
             try:
-                resp = self._post_fn(self._ingest_url, item.payload, dict(self._auth_header))
+                destination, body = unwrap_delivery(item.payload)
+                # ingest-event was the queue's only destination before
+                # MeridianHub. Keep that established route as the default so
+                # durable records written by older Hub builds still drain.
+                url = self._delivery_urls.get(destination, self._ingest_url) if destination else self._ingest_url
+                if destination and destination not in self._delivery_urls and destination != "ingest-event":
+                    raise ValueError(f"delivery_destination_not_configured:{destination}")
+                resp = self._post_fn(url, body, dict(self._auth_header))
             except Exception as e:
                 logger.warning("Notification delivery failed for %s: %s", item.id, e)
                 self._queue.nack(item.id, now=now)

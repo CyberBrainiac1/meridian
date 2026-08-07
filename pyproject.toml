@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "sqlglot>=30.0"]
 export = ["ultralytics>=8.3", "torch>=2.4"]
 
 [tool.pytest.ini_options]

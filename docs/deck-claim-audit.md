@@ -38,9 +38,9 @@ the speaker notes, not an implementation.
 
 | Claim | Verdict | Evidence |
 |---|---|---|
-| "Instant fall detection alerts to staff in under 5 seconds" | 🟡 PARTIAL → ✅ | Detection is real (`meridian_hub/classifiers/fall_state_machine.py`) and fires with no I/O in the hot path. But `STILLNESS_CONFIRM_SECONDS = 2.0` + `CANDIDATE_WINDOW_SECONDS = 3.0` mean confirmation is 2–3 s after onset *before* delivery, and **no end-to-end measurement existed**. Now measured — see `benchmarks/alert_latency_*.md`. |
+| "Instant fall detection alerts to staff in under 5 seconds" | 🟡 PARTIAL | `benchmarks/alert_latency_2026-08-07.md`: reproducible Hub-to-local-HTTP-ack p95 is **2.027s confirmed / 3.200s suspected**, including measured DirectML inference substituted into a deterministic pose timeline. It does **not** include physical camera, WAN/backend, push, or staff-phone display time, so the stronger “alerts to staff” wording remains unproven and must not be presented as measured end-to-end. |
 | "One-tap acknowledge confirms response time" | ✅ TRUE | `meridian_care/.../IncidentActionService.swift` → `respond_to_incident` RPC (`supabase/migrations/20260703000100_incident_rpc_and_views.sql:38`), writes `acknowledged_by` / `acknowledged_at`. |
-| "Real-time visibility across all resident rooms simultaneously" | 🟡 PARTIAL | `InferenceScheduler` does fair round-robin across cameras and `camera_sources` is a list, but the shipped runner (`tools/run_live_demo.py`) drove a single source. See task 7. |
+| "Real-time visibility across all resident rooms simultaneously" | ✅ TRUE, bounded | `tools/run_live_demo.py` now accepts repeated `--source` values and schedules them fairly. `tests/test_claim_guards.py` proves independent per-camera state and a camera-B fall while camera A is busy. `benchmarks/alert_latency_2026-08-07.md` measured 12 synthetic 480p streams at **15.2 FPS minimum per room** on this laptop; claim the stated limit, not unlimited rooms. |
 | "Response time tracked and logged for compliance" | ✅ TRUE | `avg_ack_seconds` view (`...incident_rpc_and_views.sql:122`), surfaced in `meridian_insights/lib/queries/analytics.ts`. |
 | "Eliminates 'detection depends on random chance'" | ✅ TRUE | Continuous per-frame inference, not scheduled rounds. |
 
@@ -56,13 +56,16 @@ the speaker notes, not an implementation.
 
 | Claim | Verdict | Evidence |
 |---|---|---|
-| "Immediate help dispatch when falls detected" | ❌ FALSE | No resident-facing dispatch surface existed. |
-| "Independent assistance requests for seniors" | ❌ FALSE | No `assistance_request` concept anywhere — grep for "request assistance", "call family", "assistance_request" returned **zero hits** across Swift, TS, Python and SQL. |
-| "Visitor verification capability for seniors" | ❌ FALSE | Visitor detection exists and notifies *caregivers*; the resident was never asked anything. |
-| "Help is coming — ETA 60 seconds" (mock) | ❌ FALSE | No ETA concept. |
+| "Immediate help dispatch when falls detected" | ✅ TRUE (built) | An idempotent trigger on `incident_events` turns a `fall_confirmed` row into exactly one `auto_fall_dispatch` assistance request, so the resident sees help coming without pressing anything. `supabase/migrations/20260807000000_meridian_hub_resident_surface.sql`. |
+| "Independent assistance requests for seniors" | ✅ TRUE (built) | `assistance_requests` + security-definer RPC; facility/resident/room come from the authenticated device mapping, never a browser parameter. UI in `meridian_hub_ui/`. |
+| "Visitor verification capability for seniors" | ✅ TRUE (built) | `visitor_verification_prompts`: an unrecognized visitor prompts the resident, a denial escalates to the care team, and an unanswered prompt expires after two minutes rather than hanging. |
+| "Help is coming — ETA 60 seconds" (mock) | 🟡 PARTIAL (built, honestly) | There is now a real ETA — `estimate_assistance_eta` derives it from the facility's 30-day acknowledgement history and returns a confidence (`data_derived` / `limited_history` / `facility_default`). **It is not 60 seconds**, and it should not be presented as a fixed number. Update the mock to show a derived estimate. |
 
-**This was the single largest gap in the deck: an entire claimed product surface
-did not exist.** See task 2.
+**This was the single largest gap in the deck — an entire claimed product
+surface did not exist — and it has now been built.** See `docs/meridian-hub.md`
+for the auth/RLS model and for what still cannot be verified without a live
+Supabase project (no Docker/CLI/psql/Deno on this machine, so migrations,
+policies and triggers are statically verified, not executed).
 
 ---
 
@@ -97,10 +100,10 @@ unverified from here. That limitation is already documented in
 | "Pose estimation runs on a Hub inside the building" | ✅ TRUE | `meridian_hub/vision/pose_estimator.py`, local ONNX session. |
 | "YOLO11 on ONNX Runtime, GPU-accelerated" | ✅ TRUE | `models/yolo11s-pose-480x640.onnx`, DirectML provider with a **loudly logged** CPU fallback (`pose_estimator.py:83`). |
 | "17-point skeleton" | ✅ TRUE | `NUM_KEYPOINTS = 17`. |
-| "frames … discarded, never written to disk, never uploaded" | ✅ TRUE | Only `tools/hold_pose_frame.py` writes an image, and only behind an explicit `--export` flag in a dev tool. Nothing in `meridian_hub/` writes or uploads a frame. Now enforced by a test — see task 6. |
-| "Fall detection and validation are fully local — no third-party AI service ever sees a resident" | ✅ TRUE, with a footnote | The daemon path (`hub_daemon.py`) makes zero network calls. The one third-party vision call (`face/body_description.py` → Hack Club → Gemini) is reached only from `tools/smoke_test_full_integration.py`, is **visitor-only**, and is not wired into the production loop. Worth stating precisely rather than absolutely. |
-| "If the internet drops, detection keeps running and alerts queue locally" | ✅ TRUE | `offline_queue/queue_store.py` + `NotificationDispatcher` nacks on failure and never drops. |
-| "Face data encrypted AES-256-GCM on the Hub; the key never leaves the building" | ✅ TRUE | `face/embedding_encryption.py`; the key is Hub-side config, never in a payload. |
+| "frames … discarded, never written to disk, never uploaded" | ✅ TRUE | `test_process_frame_cannot_write_image_or_open_network_connection` intercepts write-mode `open`, `cv2.imwrite`, and socket connects while running `HubDaemon.process_frame`; `test_process_frame_does_not_retain_raw_pixel_array` checks the input array can be collected after return. |
+| "Fall detection and validation are fully local — no third-party AI service ever sees a resident" | ✅ TRUE, with a footnote | The daemon path test blocks network connections during `process_frame`, and `test_daemon_dependency_graph_excludes_third_party_visitor_photo_describer` prevents it depending on `face/body_description.py`. That visitor-only tool path can call Hack Club → Gemini only from `tools/smoke_test_full_integration.py`. |
+| "If the internet drops, detection keeps running and alerts queue locally" | ✅ TRUE | `test_offline_event_survives_restart_then_delivers_exactly_once` simulates an outage, closes/reopens the SQLite database, then verifies one eventual 202 delivery and no duplicate drain. |
+| "Face data encrypted AES-256-GCM on the Hub; the key never leaves the building" | ✅ TRUE | `test_encrypted_outbound_observation_has_no_key_or_plaintext_embedding` serializes the actual observation payload and rejects plaintext vector markers and key material; it requires AES-256-GCM ciphertext. |
 | "The cloud stores ciphertext only — the ingest endpoint rejects plaintext outright" | ✅ TRUE | `supabase/functions/ingest-visitor-face`. |
 | "A full cloud breach yields encrypted vectors and no keys" | ✅ TRUE | Follows from the two above. |
 | "You can't steal what was never sent." | ✅ TRUE | Accurate and appropriately non-absolute. |

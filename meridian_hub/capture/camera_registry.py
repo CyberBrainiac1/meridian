@@ -55,3 +55,7 @@ class CameraRegistry:
             "resident_id, source, privacy_state FROM cameras"
         ).fetchall()
         return [CameraRecord(*row) for row in rows]
+
+    def close(self) -> None:
+        """Release the SQLite handle for orderly process/test shutdown."""
+        self._conn.close()

@@ -14,6 +14,13 @@ Realtime does not support subscribing to a *view*).
 | `incident-events-<facility_id>` | `incident_events`, filter `facility_id=eq.<id>` | Insights dashboard, Care app (owner/admin/caregiver/viewer) | New/updated incident → refresh floor view / alert feed. |
 | `notifications-<facility_id>` | `notifications`, filter `facility_id=eq.<id>` | Insights dashboard (audit trail), Care app (new-visitor banner: filter client-side for `resident_id is null`) | New row → notification was queued; `status` flips `pending`→`sent` once `notify-family` processes it. Rows come from two sources now: `respond_to_incident` (incident-linked, `incident_id` set) and the `notify_visitor_arrival` trigger (visitor-linked, `incident_id` null). |
 
+MeridianHub polls its three resident-safe views every 10 seconds rather than
+subscribing to raw rows. This is intentional: its security boundary is the
+`resident_hub_devices` JWT mapping, and polling first calls the expiry RPC so
+an unanswered visitor prompt becomes `no_response` on the server before it is
+shown. The status surface then reflects actual `assistance_requests` transitions
+(`open` → `acknowledged` → `en_route` → `resolved`), never a local timer.
+
 For the Family app: since it can't subscribe to `incident_events`
 directly (no RLS access) or to a view (Realtime limitation), poll
 `family_incident_feed` and `notifications` (filtered to the signed-in

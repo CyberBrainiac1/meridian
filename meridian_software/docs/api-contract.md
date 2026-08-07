@@ -37,6 +37,16 @@ signed-in user's session (never the service-role key from an app).
 | New-visitor notification | `select body, created_at, sent_at from notifications where resident_id = :linked_resident_id order by created_at desc` | Same table/query shape as the "staff responded" follow-up below — a family user's `notifications` feed mixes incident-response updates and new-visitor alerts for their linked resident's facility; use `incident_id is not null` vs `is null` to tell them apart in the UI if you want separate sections. |
 | "Staff reached her in 90 seconds" follow-up copy | `select body, created_at, sent_at from notifications where resident_id = :linked_resident_id order by created_at desc` | Populated by `respond_to_incident` → written by `notify-family`, see realtime-channels.md for how to know when a new one lands. |
 
+## MeridianHub (resident room device — one provisioned Hub Auth user)
+
+| Screen | Source | Notes |
+| --- | --- | --- |
+| Resident identity | `select * from resident_hub_profile` | A dedicated device JWT maps to one active `resident_hub_devices` row. It is never a staff or family session. |
+| Help status | `select * from resident_hub_assistance_feed order by requested_at desc` | RLS-safe, room-bound projection. `eta_seconds` is calculated from the facility's acknowledged incident history; `eta_confidence` tells the UI if it is data-derived, based on limited history, or the documented fallback. |
+| Request assistance / family call / emergency help | `rpc('create_resident_assistance_request', { p_request_kind })` | The RPC derives facility/resident/room from the JWT mapping. Clients cannot choose another room. The trigger writes a care-team notification; `family_contact` also writes one per consented `family_member_links` row. |
+| Visitor check | `select * from resident_hub_visitor_prompt_feed` then `rpc('respond_to_visitor_verification', { p_prompt_id, p_response })` | The view projects only body description and time/camera metadata — never ciphertext, image payloads, embedding, nonce, or key ID. Call `expire_my_visitor_verification_prompts` before refresh; expired prompts are server-transitioned to `no_response`. A denial inserts a care-team notification. |
+| Care-team dispatch lifecycle | `rpc('respond_to_assistance_request', { p_assistance_request_id, p_new_status, p_note })` | Caregiver/admin/owner-only, security definer. The resident sees server-written `acknowledged` → `en_route` → `resolved`; direct status updates are not granted. |
+
 ## Roles reference
 
 | Role | Can do |
@@ -68,3 +78,7 @@ real flow, and the backend enforces the order:
    no ingestion path can forget to notify.
 5. Every screen reads from a single documented view/table, never a
    hand-joined query across raw tables.
+6. MeridianHub extends that same lifecycle: a `fall_confirmed` insert creates
+   one idempotent `auto_fall_dispatch` assistance request, and an unknown/new
+   visitor observation creates a bounded resident prompt only for the Hub
+   provisioned to that entry camera.
