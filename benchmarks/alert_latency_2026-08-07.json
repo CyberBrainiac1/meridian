@@ -1,0 +1,123 @@
+{
+  "generated_at": "2026-08-07T23:24:21.155826+00:00",
+  "runs": 100,
+  "paths": {
+    "confirmed": {
+      "preprocess": {
+        "p50_ms": 1.76,
+        "p95_ms": 1.939,
+        "max_ms": 2.095
+      },
+      "inference": {
+        "p50_ms": 0.002,
+        "p95_ms": 0.003,
+        "max_ms": 0.004
+      },
+      "track": {
+        "p50_ms": 0.133,
+        "p95_ms": 0.179,
+        "max_ms": 0.294
+      },
+      "features_state": {
+        "p50_ms": 0.038,
+        "p95_ms": 0.05,
+        "max_ms": 0.065
+      },
+      "capture": {
+        "p50_ms": 0.0,
+        "p95_ms": 0.0,
+        "max_ms": 0.0
+      },
+      "event_emit": {
+        "p50_ms": 0.051,
+        "p95_ms": 0.068,
+        "max_ms": 0.134
+      },
+      "queue_enqueue": {
+        "p50_ms": 0.083,
+        "p95_ms": 0.111,
+        "max_ms": 0.177
+      },
+      "dispatch_ack": {
+        "p50_ms": 13.232,
+        "p95_ms": 22.643,
+        "max_ms": 118.507
+      },
+      "detection_logical": {
+        "p50_ms": 2000.0,
+        "p95_ms": 2000.0,
+        "max_ms": 2000.0
+      },
+      "total_wall_overhead": {
+        "p50_ms": 15.075,
+        "p95_ms": 24.69,
+        "max_ms": 121.276
+      }
+    },
+    "suspected": {
+      "preprocess": {
+        "p50_ms": 3.657,
+        "p95_ms": 4.146,
+        "max_ms": 4.304
+      },
+      "inference": {
+        "p50_ms": 0.005,
+        "p95_ms": 0.007,
+        "max_ms": 0.009
+      },
+      "track": {
+        "p50_ms": 0.422,
+        "p95_ms": 0.51,
+        "max_ms": 0.556
+      },
+      "features_state": {
+        "p50_ms": 0.111,
+        "p95_ms": 0.129,
+        "max_ms": 0.143
+      },
+      "capture": {
+        "p50_ms": 0.0,
+        "p95_ms": 0.0,
+        "max_ms": 0.0
+      },
+      "event_emit": {
+        "p50_ms": 0.066,
+        "p95_ms": 0.08,
+        "max_ms": 0.107
+      },
+      "queue_enqueue": {
+        "p50_ms": 0.106,
+        "p95_ms": 0.131,
+        "max_ms": 0.267
+      },
+      "dispatch_ack": {
+        "p50_ms": 9.921,
+        "p95_ms": 26.238,
+        "max_ms": 28.084
+      },
+      "detection_logical": {
+        "p50_ms": 3100.0,
+        "p95_ms": 3100.0,
+        "max_ms": 3100.0
+      },
+      "total_wall_overhead": {
+        "p50_ms": 14.12,
+        "p95_ms": 30.377,
+        "max_ms": 32.049
+      }
+    }
+  },
+  "real_pose_stage": {
+    "provider": "directml",
+    "preprocess": {
+      "p50_ms": 1.571,
+      "p95_ms": 1.874,
+      "max_ms": 2.211
+    },
+    "inference_decode": {
+      "p50_ms": 5.785,
+      "p95_ms": 6.221,
+      "max_ms": 6.369
+    }
+  }
+}

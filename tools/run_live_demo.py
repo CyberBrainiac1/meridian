@@ -33,6 +33,7 @@ from meridian_hub.demo_relay import DemoPoseRelay
 from meridian_hub.events.event_engine import EventEngine
 from meridian_hub.hub_daemon import HubDaemon
 from meridian_hub.offline_queue.queue_store import QueueStore
+from meridian_hub.scheduler.inference_scheduler import InferenceScheduler
 from meridian_hub.vision.pose_estimator import PoseEstimator
 
 BANNER = "\033[1;97;41m"  # bold white on red
@@ -43,7 +44,8 @@ RESET = "\033[0m"
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", default="0", help="webcam index (e.g. 0) or a video file path")
+    parser.add_argument("--source", action="append", default=None,
+                        help="webcam index or video path; repeat for multiple rooms (default: 0)")
     parser.add_argument("--model", default="models/yolo11s-pose-480x640.onnx")
     parser.add_argument("--provider", default="directml", choices=["directml", "cpu"])
     parser.add_argument("--room", default="room-12")
@@ -68,12 +70,15 @@ def main():
         print(f"  detection below still works, but the live skeleton view will be blank.")
         print(f"  Fix: close any old demo terminal, or run with --relay-port 8766, and retry.{RESET}")
 
+    source_values = args.source or ["0"]
     registry = CameraRegistry(db_path=":memory:")
-    registry.register(CameraRecord(
-        camera_id="cam-demo", facility_id="fac-poc-001", building_id="bld-poc-001",
-        floor_id="flr-1", room_id=args.room, resident_id=args.resident,
-        source=args.source, privacy_state="active",
-    ))
+    camera_sources = {f"cam-demo-{index + 1}": source for index, source in enumerate(source_values)}
+    for camera_id, source_value in camera_sources.items():
+        registry.register(CameraRecord(
+            camera_id=camera_id, facility_id="fac-poc-001", building_id="bld-poc-001",
+            floor_id="flr-1", room_id=args.room, resident_id=args.resident,
+            source=source_value, privacy_state="active",
+        ))
     queue = QueueStore(db_path=":memory:")
     daemon = HubDaemon(
         pose_estimator=estimator, event_engine=EventEngine(),
@@ -81,11 +86,16 @@ def main():
     )
     dispatcher = NotificationDispatcher(queue, args.backend_url)
 
-    source = int(args.source) if args.source.isdigit() else args.source
-    cap = cv2.VideoCapture(source)
-    if not cap.isOpened():
-        print(f"Could not open source: {args.source}", file=sys.stderr)
-        sys.exit(1)
+    captures = {}
+    for camera_id, source_value in camera_sources.items():
+        source = int(source_value) if source_value.isdigit() else source_value
+        cap = cv2.VideoCapture(source)
+        if not cap.isOpened():
+            for opened in captures.values():
+                opened.release()
+            print(f"Could not open source for {camera_id}: {source_value}", file=sys.stderr)
+            sys.exit(1)
+        captures[camera_id] = cap
 
     running = {"on": True}
 
@@ -95,28 +105,33 @@ def main():
 
     print(f"{GREEN}Running. Stage a fall in view of the camera. Ctrl+C to stop.{RESET}\n")
     frame_interval = 1.0 / args.target_fps
-    ts = 0.0
-    people_seen = False
+    timestamps = {camera_id: 0.0 for camera_id in camera_sources}
+    scheduler = InferenceScheduler(list(camera_sources))
+    people_seen: set[str] = set()
     try:
         while running["on"]:
             t_frame = time.perf_counter()
+            camera_id = scheduler.next_camera()
+            cap = captures[camera_id]
             ok, frame = cap.read()
             if not ok:
-                if args.loop and not str(source).isdigit():
+                source_value = camera_sources[camera_id]
+                if args.loop and not source_value.isdigit():
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
                 break
-            ts += frame_interval
+            timestamps[camera_id] += frame_interval
+            ts = timestamps[camera_id]
 
-            events = daemon.process_frame("cam-demo", frame, ts)
+            events = daemon.process_frame(camera_id, frame, ts)
 
             # Surface skeleton presence once so the presenter knows the
             # relay has something to show.
-            n_tracked = len(daemon._trackers["cam-demo"]._active) if "cam-demo" in daemon._trackers else 0
-            if n_tracked and not people_seen:
-                people_seen = True
+            n_tracked = len(daemon._trackers[camera_id]._active) if camera_id in daemon._trackers else 0
+            if n_tracked and camera_id not in people_seen:
+                people_seen.add(camera_id)
                 if relay.is_serving():
-                    print(f"{GREEN}Person detected -- skeleton is now streaming to the demo page.{RESET}")
+                    print(f"{GREEN}Person detected on {camera_id} -- skeleton is now streaming to the demo page.{RESET}")
                 else:
                     print(f"{DIM}Person detected (skeleton relay is down -- see warning above).{RESET}")
 
@@ -131,15 +146,20 @@ def main():
 
             # Deliver anything queued (app push via backend). Never blocks
             # the visible demo -- failures stay queued, offline-first.
-            dispatcher.dispatch_pending(now=ts)
+            dispatcher.dispatch_pending(now=max(timestamps.values()))
 
             elapsed = time.perf_counter() - t_frame
-            if elapsed < frame_interval:
-                time.sleep(frame_interval - elapsed)
+            # Scheduler visits every camera in turn, so this aggregate pacing
+            # preserves --target-fps as a per-camera target instead of dividing
+            # it by the number of configured rooms.
+            aggregate_interval = frame_interval / len(camera_sources)
+            if elapsed < aggregate_interval:
+                time.sleep(aggregate_interval - elapsed)
     finally:
-        cap.release()
+        for cap in captures.values():
+            cap.release()
         relay.stop()
-        print(f"\n{DIM}Demo stopped. {queue.pending(now=ts + 1e9).__len__()} event(s) still queued "
+        print(f"\n{DIM}Demo stopped. {queue.pending(now=max(timestamps.values()) + 1e9).__len__()} event(s) still queued "
               f"(would deliver once the backend is reachable).{RESET}")
 
 
