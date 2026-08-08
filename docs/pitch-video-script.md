@@ -12,6 +12,10 @@ Global rules:
 - Persistent brand mark top-right on every beat (mint on dark, brand blue on
   light), fading 826→840 so it never coexists with the end card.
 - Type: system UI stack already in the comp. Headline size 66–76, sub 30–40.
+- **App-name hierarchy (user direction):** in every headline block the app
+  name — MeridianCare / MeridianHub / MeridianFamily — is the dominant
+  element: ~42px, weight 850–900, near-black `#08131B`. The name outranks the
+  tagline because the app name is what the audience must retain.
 - Palette: the `C` constants in the comp (brand blue `#0369A1`, mint
   `#22FFC2`, dark `#05060A`, deck navy `#0B111B`).
 - Every app screen mirrors shipped code (`hub-surface.tsx`, AlertFeedView,
