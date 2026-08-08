@@ -50,7 +50,7 @@ const BrandMark = () => {
   const tint = onDark ? C.mint : C.primary;
   // Fade out just before the end card takes over, so the two marks never
   // appear at once.
-  const opacity = clamp(f, [0, 18, 795, 812], [0, 1, 1, 0]) * (onDark ? 0.92 : 0.8);
+  const opacity = clamp(f, [0, 18, 856, 870], [0, 1, 1, 0]) * (onDark ? 0.92 : 0.8);
   return (
     <div style={{position: "absolute", top: 46, right: 56, zIndex: 20, opacity,
                  display: "flex", alignItems: "center", gap: 12, pointerEvents: "none"}}>
@@ -143,6 +143,28 @@ const HubScreen = ({visitor = false}: {visitor?: boolean}) => {
 
 const FamilyScreen = () => {const f=useCurrentFrame();const local=f;const notification=clamp(local,[8,26],[0,1]);const resolved=clamp(local,[82,105],[0,1]);return <Background><div style={{position:"absolute",left:250,top:195,width:540}}><div style={{fontSize:34,color:C.primaryAlt,fontWeight:720}}>MeridianFamily</div><div style={{fontSize:72,lineHeight:1.03,letterSpacing:-3,fontWeight:790,marginTop:18}}>Stay informed.<br/>Stay close.</div><div style={{fontSize:30,color:C.foregroundMuted,lineHeight:1.4,marginTop:30}}>Updates arrive in the family app—not as a text message.</div></div><div style={{position:"absolute",right:280,top:55}}><Device label="MeridianFamily updates"><div style={{padding:"75px 28px 42px"}}><h1 style={{fontSize:42,margin:"4px 0 22px"}}>Updates</h1><Panel style={{padding:24,opacity:notification,borderLeft:`7px solid ${C.warning}`}}><div style={{display:"flex",gap:15}}>{icon("◉",C.warning)}<div><div style={{fontSize:26,fontWeight:760,lineHeight:1.25}}>Maggie may need help in Room 101.</div><div style={{fontSize:20,color:C.foregroundMuted,marginTop:8}}>Care team has been alerted.</div></div></div></Panel><div style={{marginTop:26,fontSize:22,fontWeight:750,color:C.foregroundMuted}}>STAFF RESPONSES</div><Panel style={{padding:24,marginTop:12,opacity:resolved}}><div style={{display:"flex",gap:15}}>{icon("✓",C.success)}<div><div style={{fontSize:26,fontWeight:760,lineHeight:1.25}}>A caregiver is responding.</div><div style={{fontSize:20,color:C.foregroundMuted,marginTop:8}}>Maggie is not alone.</div></div></div></Panel></div></Device></div></Background>};
 
-const EndCard = () => {const f=useCurrentFrame();const local=f;const o=clamp(local,[0,25],[0,1]);return <AbsoluteFill style={{background:`radial-gradient(circle at center, #12536b, ${C.dark} 70%)`,color:"white",justifyContent:"center",alignItems:"center",display:"flex"}}><div style={{textAlign:"center",opacity:o,scale:clamp(local,[0,40],[.94,1])}}><svg width={116} height={116} viewBox="0 0 1024 1024" style={{display:"block",margin:"0 auto 34px"}} aria-label="Meridian"><path d="M512 168 L800 268 L800 536 C800 700 676 812 512 872 C348 812 224 700 224 536 L224 268 Z" fill="none" stroke={C.mint} strokeWidth={46} strokeLinejoin="round" /><path d="M512 356 L676 490 L676 660 L560 660 L560 566 L464 566 L464 660 L348 660 L348 490 Z" fill={C.mint} /></svg><div style={{fontSize:76,fontWeight:790,letterSpacing:-3}}>Meridian</div><div style={{fontSize:49,fontWeight:650,marginTop:34,letterSpacing:-1.5}}>Faster help. Less uncertainty. More dignity.</div></div></AbsoluteFill>};
+// One-second closer matching the deck's title slide: M-notched shield with a
+// medical cross, MERIDIAN in caps, the deck's subtitle. Deliberately brief --
+// stage time belongs to the product, and this frame only needs to match the
+// slide already on screen beside it.
+const DECK_BLUE = "#69A8E0";
+const DECK_TEXT_BLUE = "#6B96EE";
+const EndCard = () => {
+  const f = useCurrentFrame();
+  const o = clamp(f, [0, 9], [0, 1]);
+  return <AbsoluteFill style={{background: "#0B111B", justifyContent: "center", alignItems: "center", display: "flex"}}>
+    <div style={{textAlign: "center", opacity: o}}>
+      <svg width={120} height={120} viewBox="0 0 1024 1024" style={{display: "block", margin: "0 auto 26px"}} aria-label="Meridian">
+        <path d="M242 250 L420 196 L512 320 L604 196 L782 250 L782 540 C782 694 668 800 512 858 C356 800 242 694 242 540 Z"
+              fill="none" stroke={DECK_BLUE} strokeWidth={52} strokeLinejoin="round" strokeLinecap="round" />
+        <path d="M462 400 H562 V470 H632 V570 H562 V640 H462 V570 H392 V470 H462 Z" fill={DECK_BLUE} />
+      </svg>
+      <div style={{fontSize: 66, fontWeight: 800, letterSpacing: 8, color: DECK_TEXT_BLUE}}>MERIDIAN</div>
+      <div style={{fontSize: 40, fontWeight: 500, marginTop: 22, color: "#93A8C4", letterSpacing: -0.5}}>The Care Intelligence Layer for Senior Living</div>
+    </div>
+  </AbsoluteFill>;
+};
 
-export const MeridianDemo = () => <AbsoluteFill><Sequence durationInFrames={270}><FallAndSkeleton /></Sequence><Sequence from={270} durationInFrames={120}><CareScreen /></Sequence><Sequence from={390} durationInFrames={150}><HubScreen /></Sequence><Sequence from={540} durationInFrames={120}><HubScreen visitor /></Sequence><Sequence from={660} durationInFrames={150}><FamilyScreen /></Sequence><Sequence from={810} durationInFrames={90}><EndCard /></Sequence><BrandMark /></AbsoluteFill>;
+// End card is one second flat -- stage time belongs to the product beats,
+// which each gained time when it shrank.
+export const MeridianDemo = () => <AbsoluteFill><Sequence durationInFrames={270}><FallAndSkeleton /></Sequence><Sequence from={270} durationInFrames={150}><CareScreen /></Sequence><Sequence from={420} durationInFrames={150}><HubScreen /></Sequence><Sequence from={570} durationInFrames={150}><HubScreen visitor /></Sequence><Sequence from={720} durationInFrames={150}><FamilyScreen /></Sequence><Sequence from={870} durationInFrames={30}><EndCard /></Sequence><BrandMark /></AbsoluteFill>;
