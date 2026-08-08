@@ -42,6 +42,12 @@ def main():
     )
 
     cap = cv2.VideoCapture(args.video)
+    # Timestamps must reflect the clip's REAL frame rate. Every kinematic
+    # feature the fall classifier reads is a rate (px/sec, degrees, stillness
+    # seconds), so assuming the wrong fps silently rescales velocity and makes
+    # a genuine fall undetectable. This was hardcoded to 10.0 and quietly
+    # suppressed real detections on any clip that was not ~10fps.
+    fps = cap.get(cv2.CAP_PROP_FPS) or 10.0
     frame_count = 0
     detection_frame_count = 0
     max_people_in_one_frame = 0
@@ -54,7 +60,7 @@ def main():
         if not ok:
             break
         frame_count += 1
-        timestamp = frame_count / 10.0  # synthetic but monotonic, matches video's ~10fps
+        timestamp = frame_count / fps
 
         try:
             events = daemon.process_frame("cam-smoke", frame, timestamp)
