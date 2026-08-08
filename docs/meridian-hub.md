@@ -65,7 +65,9 @@ builder; known visitors do not enter the resident-prompt path.
 ## Verification and limits
 
 - Python baseline: 170 tests passed before this work. `python -m pytest -q`
-  now passes **186/186** tests, including durable routing, every-migration
+  now passes **203/203** tests (186 at the time this document was first
+  written; the family SMS and activity-rollup work added the rest),
+  including durable routing, every-migration
   parsing, claimed-table AST assertions, and a computed WCAG contrast test for
   the Hub's body and control color pairs.
 - `tests/test_supabase_migrations.py` parses **every** migration with SQLGlot's

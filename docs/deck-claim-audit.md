@@ -1,7 +1,11 @@
 # Pitch Deck Claim Audit — "Meridian AI Pitch Deck (A)"
 
 Every claim on all 9 slides, mapped to the code that does or does not back it.
-Audited against commit `9940e71` on `main`, with `170/170` Python tests passing.
+
+Originally audited against commit `9940e71` (170/170 Python tests passing).
+Verdicts below reflect the state **after** the gaps were built: `203/203` tests
+pass, both Next.js apps build, and all of it was re-verified from a clean
+`git clone` of `origin/main` rather than from a local working tree.
 
 Verdicts:
 
