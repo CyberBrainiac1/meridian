@@ -28,7 +28,7 @@ struct VisitorLogView: View {
                         VStack(alignment: .leading, spacing: MeridianSpacing.sm) {
                             ForEach(Array(viewModel.visitors.enumerated()), id: \.offset) { _, visitor in
                                 HStack(spacing: MeridianSpacing.sm) {
-                                    Image(systemName: "door.left.hand.open")
+                                    Image(systemName: "person.text.rectangle.fill")
                                         .foregroundStyle(MeridianColor.primaryAlt)
                                     Text("Visitor at \(visitor.detectedAt.formatted(date: .abbreviated, time: .shortened))")
                                         .font(MeridianFont.body(15))

@@ -54,7 +54,7 @@ private struct UpdateRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: MeridianSpacing.sm) {
-            Image(systemName: isEmergency ? "checkmark.shield.fill" : "door.left.hand.open")
+            Image(systemName: isEmergency ? "checkmark.shield.fill" : "person.text.rectangle.fill")
                 .foregroundStyle(isEmergency ? MeridianColor.success : MeridianColor.primary)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 3) {

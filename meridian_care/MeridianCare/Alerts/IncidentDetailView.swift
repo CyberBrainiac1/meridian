@@ -9,6 +9,7 @@ struct IncidentDetailView: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var didSucceed = false
+    @State private var pendingEscalate = false
 
     var body: some View {
         ScrollView {
@@ -54,7 +55,11 @@ struct IncidentDetailView: View {
                         VStack(spacing: MeridianTouchTarget.minSpacing) {
                             ForEach(incident.status.nextStatuses, id: \.self) { status in
                                 Button {
-                                    Task { await respond(status) }
+                                    if status == .escalated {
+                                        pendingEscalate = true
+                                    } else {
+                                        Task { await respond(status) }
+                                    }
                                 } label: {
                                     HStack {
                                         Text(actionLabel(status))
@@ -86,6 +91,14 @@ struct IncidentDetailView: View {
         .background(MeridianColor.background)
         .navigationTitle("Alert")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Escalate alert", isPresented: $pendingEscalate) {
+            Button("Cancel", role: .cancel) {}
+            Button("Escalate", role: .destructive) {
+                Task { await respond(.escalated) }
+            }
+        } message: {
+            Text("Notify the on-call nurse and facility director?")
+        }
     }
 
     private func actionLabel(_ status: IncidentStatus) -> String {

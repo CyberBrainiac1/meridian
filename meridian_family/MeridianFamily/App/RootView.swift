@@ -12,7 +12,7 @@ struct RootView: View {
                 .tabItem { Label("Updates", systemImage: "bell.fill") }
 
             VisitorLogView()
-                .tabItem { Label("Visitors", systemImage: "door.left.hand.open") }
+                .tabItem { Label("Visitors", systemImage: "person.text.rectangle.fill") }
 
             PrivacyView(residents: residents)
                 .tabItem { Label("Privacy", systemImage: "lock.shield") }

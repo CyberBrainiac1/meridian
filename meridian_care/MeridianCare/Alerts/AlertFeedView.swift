@@ -1,19 +1,22 @@
 import SwiftUI
 
 struct AlertFeedView: View {
-    @StateObject private var viewModel: AlertFeedViewModel
+    /// Owned by RootView (shared with the urgent-alert overlay), not this
+    /// view — an incident acknowledged from the full-screen interrupt has to
+    /// disappear from this list without a second fetch.
+    @ObservedObject var viewModel: AlertFeedViewModel
+    /// Set by RootView's "View alert" action to jump straight into an
+    /// incident's detail screen, bypassing the list.
+    @Binding var pendingOpenIncidentId: String?
+    @State private var path: [String] = []
     @State private var quickActionError: String?
     /// Guards the swipe action the same way IncidentDetailView guards its
     /// buttons — a double-swipe would otherwise fire two RPCs for one row.
     @State private var submittingIds: Set<String> = []
     @Environment(\.scenePhase) private var scenePhase
 
-    init(facilityId: String) {
-        _viewModel = StateObject(wrappedValue: AlertFeedViewModel(facilityId: facilityId))
-    }
-
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if viewModel.incidents.isEmpty {
                     ContentUnavailableView(
@@ -79,8 +82,11 @@ struct AlertFeedView: View {
                 Text(quickActionError ?? "")
             })
         }
-        .task { viewModel.start() }
-        .onDisappear { viewModel.stop() }
+        .onChange(of: pendingOpenIncidentId) { _, newValue in
+            guard let newValue else { return }
+            path = [newValue]
+            pendingOpenIncidentId = nil
+        }
         .onChange(of: scenePhase) { _, phase in
             // Tabs stay mounted and start()'s guard means the initial fetch
             // runs once per launch, so without this the feed comes back from
