@@ -4,6 +4,7 @@ import time
 import numpy as np
 
 from meridian_hub.capture.camera_registry import CameraRegistry
+from meridian_hub.activity_rollup import ResidentActivityRollupAggregator
 from meridian_hub.classifiers.fall_state_machine import FallStateMachine
 from meridian_hub.classifiers.fall_types import FallState
 from meridian_hub.events.event_engine import EventEngine
@@ -14,6 +15,7 @@ from meridian_hub.offline_queue.queue_store import QueueStore
 from meridian_hub.validation.local_validator import LocalHeuristicValidator, ValidationOutcome
 from meridian_hub.vision.preprocessing import preprocess_frame
 from meridian_hub.vision.tracker import IouTracker
+from meridian_hub.night_rounds.status_classifier import MOVEMENT_THRESHOLD
 
 CONFIRMED_REASON_CODES = ["rapid_vertical_drop", "horizontal_torso", "remained_near_floor"]
 
@@ -32,6 +34,7 @@ class HubDaemon:
     def __init__(
         self, pose_estimator, event_engine: EventEngine, queue_store: QueueStore,
         camera_registry: CameraRegistry, demo_relay=None, stage_observer=None,
+        activity_rollup: ResidentActivityRollupAggregator | None = None,
     ):
         self._pose_estimator = pose_estimator
         self._event_engine = event_engine
@@ -42,6 +45,8 @@ class HubDaemon:
         self._trackers: dict[str, IouTracker] = {}
         self._feature_managers: dict[str, TrackFeatureManager] = {}
         self._fall_machines: dict[tuple[str, int], FallStateMachine] = {}
+        self._activity_rollup = activity_rollup
+        self._activity_positions: dict[tuple[str, int], tuple[float, float, float]] = {}
         # Optional, pitch-demo-only: broadcasts raw pose keypoints to a
         # local WebSocket client (see demo_relay.py). None by default --
         # zero effect on detection/classification either way.
@@ -79,6 +84,8 @@ class HubDaemon:
         camera_record = self._camera_registry.get(camera_id)
         events: list[MeridianEvent] = []
 
+        self._record_activity(camera_id, camera_record, tracked, timestamp)
+
         for person in tracked:
             started = time.perf_counter_ns() if self._stage_observer is not None else None
             feature_manager.update(person.track_id, person.detection)
@@ -114,6 +121,42 @@ class HubDaemon:
                 self._observe("queue_enqueue", started)
 
         return events
+
+    def _record_activity(self, camera_id, camera_record, tracked, timestamp: float) -> None:
+        """Send only completed category rollups, never pose/position data.
+
+        A room may contain visitors or staff.  We therefore observe only
+        single-person frames and mark all zero/multi-person frames as unknown;
+        unknown coverage cannot become a "less active" conclusion.
+        """
+
+        if self._activity_rollup is None or camera_record is None or camera_record.resident_id is None:
+            return
+
+        active_keys = {(camera_id, person.track_id) for person in tracked}
+        for key in list(self._activity_positions):
+            if key[0] == camera_id and key not in active_keys:
+                del self._activity_positions[key]
+
+        visible = len(tracked) == 1
+        moving = False
+        if visible:
+            person = tracked[0]
+            x, y = person.detection.hip_center()
+            key = (camera_id, person.track_id)
+            previous = self._activity_positions.get(key)
+            if previous is not None:
+                old_x, old_y, old_timestamp = previous
+                elapsed = timestamp - old_timestamp
+                if elapsed > 0:
+                    moving = (((x - old_x) ** 2 + (y - old_y) ** 2) ** 0.5 / elapsed) > MOVEMENT_THRESHOLD
+            self._activity_positions[key] = (x, y, timestamp)
+
+        completed = self._activity_rollup.observe(
+            camera_record.resident_id, timestamp, visible=visible, moving=moving,
+        )
+        for rollup in completed:
+            self._delivery_queue.enqueue_resident_activity_rollup(rollup, now=timestamp)
 
     def _resolve_suspected(self, camera_record, camera_id, track_id, features, timestamp):
         # Fail-open policy lives here, not in the validator itself (design

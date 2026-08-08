@@ -66,6 +66,53 @@ def test_meridian_hub_migration_creates_its_claimed_tables_in_the_ast():
     } <= _created_table_names(expressions)
 
 
+def test_activity_rollup_migration_creates_its_table_and_family_view_in_the_ast():
+    expressions = _parse(MIGRATIONS / "20260807000200_resident_activity_rollup.sql")
+    assert "resident_activity_rollups" in _created_table_names(expressions)
+    views = {
+        expression.this.name
+        for expression in expressions
+        if isinstance(expression, exp.Create)
+        and expression.args.get("kind") == "VIEW"
+        and isinstance(expression.this, exp.Table)
+    }
+    assert "family_activity_rollup_feed" in views
+    functions = {
+        expression.this.this.name
+        for expression in expressions
+        if isinstance(expression, exp.Create) and isinstance(expression.this, exp.UserDefinedFunction)
+    }
+    assert "record_resident_activity_rollup" in functions
+
+
+def test_family_sms_escalation_migration_creates_its_claimed_tables_in_the_ast():
+    expressions = _parse(MIGRATIONS / "20260807000100_family_sms_escalation.sql")
+    assert {
+        "facility_sms_escalation_policies",
+        "family_sms_preferences",
+        "family_sms_consent_events",
+        "family_sms_recipient_rate_windows",
+        "family_sms_escalations",
+        "family_sms_delivery_attempts",
+    } <= _created_table_names(expressions)
+
+
+def test_family_sms_escalation_migration_has_authoritative_queue_and_delivery_functions():
+    expressions = _parse(MIGRATIONS / "20260807000100_family_sms_escalation.sql")
+    functions = {
+        expression.this.this.name
+        for expression in expressions
+        if isinstance(expression, exp.Create) and isinstance(expression.this, exp.UserDefinedFunction)
+    }
+    assert {
+        "set_my_family_sms_consent",
+        "queue_family_sms_escalations",
+        "claim_family_sms_escalations",
+        "complete_family_sms_attempt",
+        "record_family_sms_provider_status",
+    } <= functions
+
+
 def test_resident_hub_views_never_expose_face_crypto_material():
     """Slide 6's promise, enforced at the resident surface.
 

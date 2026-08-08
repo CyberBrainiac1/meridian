@@ -98,6 +98,45 @@ struct FamilyVisitorRow: Codable, Equatable {
     }
 }
 
+/// public.family_activity_rollup_feed — category-only daily room-camera
+/// comparison. The database deliberately exposes no counts, room/camera IDs,
+/// pose, tracks, or timestamps within the day.
+enum FamilyMovementPattern: String, Codable {
+    case usual
+    case lowerThanUsual = "lower_than_usual"
+    case higherThanUsual = "higher_than_usual"
+    case notCompared = "not_compared"
+    case insufficientObservation = "insufficient_observation"
+}
+
+enum FamilyActivityBaselineStatus: String, Codable {
+    case ready
+    case building
+}
+
+enum FamilyActivityObservationStatus: String, Codable {
+    case sufficient
+    case limited
+}
+
+struct FamilyActivityRollupRow: Codable, Equatable {
+    let residentId: String
+    let rollupDate: String
+    let daytimePattern: FamilyMovementPattern
+    let nighttimePattern: FamilyMovementPattern
+    let baselineStatus: FamilyActivityBaselineStatus
+    let observationStatus: FamilyActivityObservationStatus
+
+    enum CodingKeys: String, CodingKey {
+        case residentId = "resident_id"
+        case rollupDate = "rollup_date"
+        case daytimePattern = "daytime_pattern"
+        case nighttimePattern = "nighttime_pattern"
+        case baselineStatus = "baseline_status"
+        case observationStatus = "observation_status"
+    }
+}
+
 /// public.notifications — RLS already scopes this to the caller's linked
 /// resident(s); mixes incident-response updates (incident_id set) and
 /// new-visitor alerts (incident_id null).

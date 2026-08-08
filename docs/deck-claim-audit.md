@@ -48,7 +48,7 @@ the speaker notes, not an implementation.
 
 | Claim | Verdict | Evidence |
 |---|---|---|
-| "Daily summaries showing resident activity and wellbeing" | 🟡 PARTIAL | `DailySummaryViewModel.swift` exists and works, but its own doc comment admits activity/meals **have no data source**. It only counts incidents + visitors. The slide mock shows "✓ Breakfast ✓ Activity time" — neither is detectable today. See task 5. |
+| "Daily summaries showing resident activity and wellbeing" | ✅ TRUE for activity (built) / ❌ FALSE for meals | Activity is now real: `20260807000200_resident_activity_rollup.sql` + Hub-local aggregation deliver day/night movement **patterns compared to the resident's own baseline** ("lower than usual"), with `insufficient_observation` when the resident was simply out of view — a sparse day is never reported as a low-activity day. The family receives categories only: no counts, coordinates, camera or room IDs, and no daily trace (enforced by test). **Meals remain unbuildable and were deliberately refused** — see `docs/resident-activity-rollup.md`. The mock's "✓ Breakfast" must come off the slide. |
 | "Instant emergency notifications with resolution status" | ✅ TRUE | `notifications` table + `notify-family` Edge Function; resolution status flows through `family_incident_feed`. |
 | "Verified visibility into what's actually happening" | ✅ TRUE | RLS-scoped `family_incident_feed` / `family_visitor_feed`. |
 
@@ -129,7 +129,7 @@ notes. Slide 7 is where a judge is most likely to ask "says who?".
 
 | Claim | Verdict | Evidence |
 |---|---|---|
-| "MeridianFamily delivers daily summaries **and emergency SMS** to families" | ❌ FALSE | Commit `17a60d4` explicitly **removed Twilio SMS** in favour of in-app notification delivery. `notification_dispatcher.py`'s own docstring says "This replaces SMS as the alert-delivery mechanism." The slide claims a channel that was deleted. See task 3. |
+| "MeridianFamily delivers daily summaries **and emergency SMS** to families" | 🟡 PARTIAL (built; live delivery unverified) | Emergency SMS is now a consent-gated escalation only: an active family SMS opt-in and resident `family_visibility` consent are required, the incident must remain critical/unacknowledged for the facility-configurable five-minute default, and rate/idempotency/delivery audit records are enforced in the additive SMS migration. `notify-family` calls Twilio only for claimed escalations; normal app notifications remain push-first. This machine could not deploy or test Twilio/Supabase live, so do not call delivery demonstrated until the deployment checklist in `docs/family-sms-escalation.md` passes. |
 | "MeridianHub gives seniors independent help requests and visitor verification" (×2) | ❌ FALSE | Same gap as slide 3. See task 2. |
 | "Camera-based detection with zero wearable compliance issues" | ✅ TRUE | No wearable anywhere in the system. |
 | "Open-source pose model with more parameters for higher accuracy" | 🟡 PARTIAL | `yolo11s-pose` is genuinely open-source and genuinely larger than `yolo11n`. But "more parameters than SafelyYou/CarePredict" is unknowable — their models are proprietary. Reword to what is defensible: open-source, auditable, and swappable. |
@@ -147,16 +147,43 @@ to build.
 
 ---
 
-## Summary of what had to be built
+## Summary — what was built, and what is now known
 
-| # | Gap | Slides affected | Severity |
+| # | Gap | Slides | Outcome |
 |---|---|---|---|
-| 1 | MeridianHub resident product did not exist | 3, 8 | **Critical** — a whole claimed product |
-| 2 | Emergency SMS was removed but is still claimed | 8 | **High** — claims a deleted feature |
-| 3 | "Under 5 seconds" was never measured | 3 | **High** — a falsifiable number |
-| 4 | "Activity and wellbeing" had no data source | 3 | Medium |
-| 5 | Privacy claims were true but unproven | 6 | Medium — needs executable proof |
-| 6 | Multi-camera simultaneity was untested | 3 | Medium |
+| 1 | MeridianHub resident product did not exist | 3, 8 | **Built.** Assistance requests, auto-dispatch on confirmed fall, resident visitor verification, device-scoped RLS, accessible UI. |
+| 2 | Emergency SMS removed but still claimed | 8 | **Built** as a consent-gated escalation. Live delivery still unverified — do not say "SMS" on stage yet. |
+| 3 | "Under 5 seconds" never measured | 3 | **Measured.** 2.027s / 3.200s p95 Hub-to-ingest. Under budget, but **not** end-to-end — the stronger "to staff" wording stays unproven. |
+| 4 | "Activity and wellbeing" had no data source | 3 | **Activity built** against the resident's own baseline. **Meals refused** — must come off the mock. |
+| 5 | Privacy claims true but unproven | 6 | **Now enforced by construction**, and mutation-tested. |
+| 6 | Multi-camera simultaneity untested | 3 | **Verified and bounded**: 12 rooms at ≥15.2 FPS on this laptop. |
 
-Items that cannot be fixed by building and must be fixed by **editing the deck**
-are listed in `docs/deck-corrections.md`.
+### On the strength of this evidence
+
+Not all green checks are equally strong, and the difference matters more than
+the count:
+
+- **Strongest — mutation-tested guards.** Three guards were verified by
+  deliberately introducing the violation they exist to catch (a frame written to
+  disk, face ciphertext joined into a resident view, an SQL gate removed from the
+  SMS escalation). Each failed as designed. These claims are true *by
+  construction*: a future refactor that breaks them breaks the build.
+- **Strong — measured numbers.** The latency and multi-camera figures were
+  produced on this machine and are reproducible from the commands in
+  `benchmarks/alert_latency_2026-08-07.md`. Their stated limits are part of the
+  claim, not a footnote.
+- **Weaker — statically verified SQL.** This machine has no Docker, supabase
+  CLI, psql or Deno, so **no migration, RLS policy, trigger or Edge Function in
+  this work has ever been executed.** They are parsed, AST-asserted, and
+  reviewed. The SMS decision matrix is tested against a Python *model* of the
+  SQL, with a drift guard pinning the model's gates to the function body — but a
+  model is not the database.
+- **Weakest — uncompiled Swift.** No Mac, so `meridian_care` and
+  `meridian_family` changes have not been compiled, let alone run.
+
+**Before the pitch, the highest-value verification left is deploying the three
+new migrations to a live Supabase project and exercising the RLS policies with
+distinct JWTs.** That is where a real defect is most likely to still be hiding.
+
+Items that cannot be fixed by building — and must be fixed by **editing the
+deck** — are in `docs/deck-corrections.md`.

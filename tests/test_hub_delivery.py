@@ -10,8 +10,11 @@ from meridian_hub.ingestion.hub_delivery import (
     DELIVERY_ENVELOPE_KEY,
     HubDeliveryQueue,
     INCIDENT_DESTINATION,
+    RESIDENT_ACTIVITY_ROLLUP_DESTINATION,
     VISITOR_OBSERVATION_DESTINATION,
 )
+from meridian_hub.activity_rollup import ResidentActivityRollup
+from datetime import date
 from meridian_hub.offline_queue.queue_store import QueueStore
 
 
@@ -77,6 +80,27 @@ def test_known_visitor_is_not_sent_to_the_resident_verification_trigger():
 
     assert reporter.report(observation) is None
     assert store.pending(now=0.0) == []
+
+
+def test_activity_rollup_queue_payload_has_only_category_rpc_arguments():
+    store = QueueStore(":memory:")
+    rollup = ResidentActivityRollup(
+        resident_id="resident-1", rollup_date=date(2026, 8, 7),
+        daytime_pattern="usual", nighttime_pattern="not_compared",
+        baseline_status="ready", observation_status="sufficient",
+    )
+
+    HubDeliveryQueue(store).enqueue_resident_activity_rollup(rollup)
+
+    envelope = store.pending(now=0.0)[0].payload[DELIVERY_ENVELOPE_KEY]
+    assert envelope["destination"] == RESIDENT_ACTIVITY_ROLLUP_DESTINATION
+    assert envelope["payload"] == {
+        "p_rollup_date": "2026-08-07",
+        "p_daytime_pattern": "usual",
+        "p_nighttime_pattern": "not_compared",
+        "p_baseline_status": "ready",
+        "p_observation_status": "sufficient",
+    }
 
 
 def test_dispatcher_routes_envelopes_and_only_acks_after_backend_success():

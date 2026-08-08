@@ -44,13 +44,17 @@ of the slide have already earned.
 
 ## 3. Slide 8 — "emergency SMS to families"
 
-**Status: being fixed in code**, but read this before presenting.
+**Status: built as a narrow escalation channel; live delivery is not yet
+verified.**
 
 SMS delivery was deliberately removed in commit `17a60d4` and replaced with
-in-app notification delivery. `notification_dispatcher.py` still says so in its
-own docstring. Until the SMS work lands and is verified against a live Twilio
-account, **do not say "SMS" on stage** — say "instant notification to the
-family's phone", which is true today.
+in-app notification delivery. That decision remains: app notification is the
+default. The new SMS path only escalates a critical incident that staff have
+not acknowledged after the configured threshold, and only to a family member
+with explicit SMS opt-in and active resident family-visibility consent. Until
+the deployment checklist has been verified with a live Twilio account,
+**do not say "SMS" on stage** — say "instant notification to the family's
+phone", which is true today.
 
 Note the deck also implies SMS is a differentiator versus SafelyYou. It is not
 much of one; the differentiator is *who gets told and how fast*, not the transport.
@@ -73,8 +77,22 @@ refused to fabricate. If a judge asks "how do you know she ate breakfast?",
 there is no answer.
 
 **Fix:** replace "Breakfast" in the mock with a signal the system genuinely
-produces. Activity/mobility signals are being made real (see
-`docs/deck-claim-audit.md` task 5); meals are not.
+produces. Activity is now real — see `docs/resident-activity-rollup.md` — so
+the mock can honestly show an activity line. Meals cannot, and were deliberately
+refused rather than faked.
+
+**The mock's headline also needs updating.** It reads "Sarah had a good day."
+The app no longer says that, on purpose: "a good day" is a wellbeing judgement
+the system cannot make from pose. What it can honestly say is what the shipped
+copy now says — *"The movement we saw in Sarah's room followed its usual rhythm
+today."* Note the phrasing attributes the observation to the **room**, not the
+person, because the camera cannot confirm *who* was moving. That distinction is
+small on a slide and large under questioning; keep it.
+
+Also refused, and worth knowing before a judge probes the activity claim: time
+out of room, sleep quality, bathroom trips, gait-health conclusions, and any
+identity claim from pose. The reasoning for each is in
+`docs/resident-activity-rollup.md`.
 
 ---
 

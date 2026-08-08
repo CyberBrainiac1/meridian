@@ -1,4 +1,4 @@
-import type { IncidentEventType, IncidentStatus, VisitorMatchStatus } from "@/lib/types";
+import type { IncidentEventType, IncidentStatus, ResidentActivityRollupRow, VisitorMatchStatus } from "@/lib/types";
 
 const VISITOR_MATCH_LABEL: Record<VisitorMatchStatus, string> = {
   new_visitor: "New visitor",
@@ -49,6 +49,18 @@ const STATUS_LABEL: Record<IncidentStatus, string> = {
 
 export function formatStatus(status: IncidentStatus): string {
   return STATUS_LABEL[status] ?? status;
+}
+
+/** A category-only room-camera observation, not a clinical mobility score. */
+export function formatActivityRollup(rollup: ResidentActivityRollupRow): string {
+  if (rollup.baseline_status === "building") return "Building this room’s usual movement baseline";
+  if (rollup.observation_status === "limited") return "Limited observation — no movement comparison";
+  switch (rollup.daytime_pattern) {
+    case "usual": return "Daytime room movement followed the usual pattern";
+    case "lower_than_usual": return "Daytime room movement was lower than usual";
+    case "higher_than_usual": return "Daytime room movement was higher than usual";
+    default: return "No daytime movement comparison available";
+  }
 }
 
 /** Room-level status derived from facility_floor_view. device_offline /

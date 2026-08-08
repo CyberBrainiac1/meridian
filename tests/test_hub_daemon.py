@@ -1,8 +1,9 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import numpy as np
 
 from meridian_hub.capture.camera_registry import CameraRegistry, CameraRecord
+from meridian_hub.activity_rollup import ActivityHistorySample, InMemoryActivityHistory, ResidentActivityRollupAggregator
 from meridian_hub.events.event_engine import EventEngine
 from meridian_hub.hub_daemon import HubDaemon
 from meridian_hub.offline_queue.queue_store import QueueStore
@@ -58,7 +59,7 @@ class _ScriptedPoseEstimator:
         return next(self._calls)
 
 
-def _build_daemon(detections_per_call):
+def _build_daemon(detections_per_call, *, activity_rollup=None):
     registry = CameraRegistry(db_path=":memory:")
     registry.register(CameraRecord(
         camera_id="cam-1", facility_id="fac-1", building_id="bld-1",
@@ -70,6 +71,7 @@ def _build_daemon(detections_per_call):
         event_engine=EventEngine(clock=lambda: datetime(2026, 7, 2, 9, 0, 0, tzinfo=timezone.utc)),
         queue_store=QueueStore(db_path=":memory:"),
         camera_registry=registry,
+        activity_rollup=activity_rollup,
     )
     return daemon
 
@@ -100,3 +102,27 @@ def test_fall_sequence_produces_confirmed_event_with_correct_mapping():
     assert event.room_id == "room-1"
     assert event.resident_id == "res-1"
     assert event.camera_id == "cam-1"
+
+
+def test_injected_activity_rollup_queues_only_completed_category_payloads():
+    baseline = InMemoryActivityHistory([
+        ActivityHistorySample("res-1", date(2026, 7, day), 4, None)
+        for day in range(1, 8)
+    ])
+    aggregator = ResidentActivityRollupAggregator(baseline, timezone_name="UTC")
+    day_one = [datetime(2026, 8, 1, 9 + index // 2, (index % 2) * 30, tzinfo=timezone.utc).timestamp() for index in range(8)]
+    day_two = datetime(2026, 8, 2, 9, tzinfo=timezone.utc).timestamp()
+    daemon = _build_daemon([[_standing_detection(t)] for t in [*day_one, day_two]], activity_rollup=aggregator)
+    frame = np.zeros((10, 10, 3), dtype=np.uint8)
+
+    for timestamp in [*day_one, day_two]:
+        daemon.process_frame("cam-1", frame, timestamp)
+
+    queued = daemon._queue_store.pending(now=day_two)
+    payload = queued[0].payload["_meridian_delivery"]["payload"]
+    assert queued[0].payload["_meridian_delivery"]["destination"] == "record-resident-activity-rollup"
+    assert payload["p_daytime_pattern"] == "lower_than_usual"
+    assert set(payload) == {
+        "p_rollup_date", "p_daytime_pattern", "p_nighttime_pattern",
+        "p_baseline_status", "p_observation_status",
+    }

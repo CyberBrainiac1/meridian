@@ -11,12 +11,14 @@ from collections.abc import Mapping
 from typing import Any
 
 from meridian_hub.events.schemas import MeridianEvent
+from meridian_hub.activity_rollup import ResidentActivityRollup
 from meridian_hub.face.visitor_observation import VisitorFaceObservation
 from meridian_hub.offline_queue.queue_store import QueueStore
 
 DELIVERY_ENVELOPE_KEY = "_meridian_delivery"
 INCIDENT_DESTINATION = "ingest-event"
 VISITOR_OBSERVATION_DESTINATION = "ingest-visitor-face"
+RESIDENT_ACTIVITY_ROLLUP_DESTINATION = "record-resident-activity-rollup"
 
 
 class HubDeliveryQueue:
@@ -44,6 +46,18 @@ class HubDeliveryQueue:
             destination=VISITOR_OBSERVATION_DESTINATION,
             payload=observation.model_dump(mode="json"),
             idempotency_key=observation.source_event_id,
+            now=now,
+        )
+
+    def enqueue_resident_activity_rollup(
+        self, rollup: ResidentActivityRollup, *, now: float = 0.0
+    ) -> str:
+        """Queues the category-only daily summary for the authenticated Hub RPC."""
+
+        return self._enqueue(
+            destination=RESIDENT_ACTIVITY_ROLLUP_DESTINATION,
+            payload=rollup.delivery_payload(),
+            idempotency_key=f"activity:{rollup.resident_id}:{rollup.rollup_date.isoformat()}",
             now=now,
         )
 

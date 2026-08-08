@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { verifySession } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
-import { getResidentActivity, getResidentProfile } from "@/lib/queries/resident";
+import { getLatestResidentActivityRollup, getResidentActivity, getResidentProfile } from "@/lib/queries/resident";
 import { weeklyIncidentSeries } from "@/lib/aggregate";
-import { formatEventType, formatRelativeTime, formatStatus } from "@/lib/format";
+import { formatActivityRollup, formatEventType, formatRelativeTime, formatStatus } from "@/lib/format";
 import { SeverityBadge } from "@/components/status-badge";
 import { TrendLineChart } from "@/components/trend-line-chart";
 
@@ -18,9 +18,10 @@ export default async function ResidentDetailPage({
   await verifySession();
   const supabase = await createClient();
 
-  const [profile, activity] = await Promise.all([
+  const [profile, activity, activityRollup] = await Promise.all([
     getResidentProfile(supabase, id),
     getResidentActivity(supabase, id),
+    getLatestResidentActivityRollup(supabase, id),
   ]);
 
   if (!profile) notFound();
@@ -56,6 +57,22 @@ export default async function ResidentDetailPage({
           <p className="text-[var(--color-foreground-muted)]">{profile.care_notes}</p>
         </div>
       )}
+
+      <section className="soft-card p-4 mb-6">
+        <h2 className="font-semibold mb-1">Latest room movement pattern</h2>
+        {activityRollup ? (
+          <>
+            <p className="text-sm">{formatActivityRollup(activityRollup)}</p>
+            <p className="text-xs text-[var(--color-foreground-muted)] mt-2">
+              {activityRollup.rollup_date} · Coarse room-camera observation only — not a clinical assessment or a location history.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-[var(--color-foreground-muted)]">
+            No completed movement comparison is available yet.
+          </p>
+        )}
+      </section>
 
       <section className="soft-card p-4 mb-6">
         <h2 className="font-semibold mb-1">Incident frequency by week</h2>

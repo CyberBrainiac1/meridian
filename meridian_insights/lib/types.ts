@@ -81,6 +81,18 @@ export interface ResidentActivityRow {
     resolution_note: string | null;
 }
 
+/** public.resident_activity_rollups — coarse daily room-camera trend for the
+ * care team. It intentionally contains no pose, coordinates, event times, or
+ * movement counts. */
+export interface ResidentActivityRollupRow {
+    resident_id: string;
+    rollup_date: string;
+    daytime_pattern: "usual" | "lower_than_usual" | "higher_than_usual" | "not_compared" | "insufficient_observation";
+    nighttime_pattern: "usual" | "lower_than_usual" | "higher_than_usual" | "not_compared" | "insufficient_observation";
+    baseline_status: "ready" | "building";
+    observation_status: "sufficient" | "limited";
+}
+
 /** public.family_incident_feed — Family app daily summary / alert source. */
 export interface FamilyIncidentRow {
     facility_id: string;
