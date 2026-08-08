@@ -77,7 +77,7 @@ class TwilioSmsProvider implements SmsProvider {
     private readonly accountSid: string,
     private readonly authToken: string,
     private readonly from: string,
-    private readonly statusCallbackUrl: string,
+    private readonly statusCallbackUrl: string | undefined,
   ) {}
 
   async send(escalation: ClaimedSmsEscalation): Promise<SmsSendResult> {
@@ -85,8 +85,13 @@ class TwilioSmsProvider implements SmsProvider {
       To: escalation.phone_e164,
       From: this.from,
       Body: escalation.body,
-      StatusCallback: this.statusCallbackUrl,
     });
+    // Delivery receipts are an enhancement, not a send requirement. Without a
+    // public callback URL the message still goes out; the escalation simply
+    // settles at provider_accepted instead of delivered/undelivered.
+    if (this.statusCallbackUrl) {
+      form.set("StatusCallback", this.statusCallbackUrl);
+    }
     try {
       const response = await fetch(
         `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(this.accountSid)}/Messages.json`,
@@ -130,9 +135,11 @@ class TwilioSmsProvider implements SmsProvider {
 export function createSmsProvider(environment: Record<string, string | undefined>): SmsProvider {
   const accountSid = environment.TWILIO_ACCOUNT_SID;
   const authToken = environment.TWILIO_AUTH_TOKEN;
-  const from = environment.TWILIO_FROM_NUMBER;
+  // TWILIO_PHONE_NUMBER is the name the rest of the repo and .env.example use;
+  // TWILIO_FROM_NUMBER stays accepted so existing deployments keep working.
+  const from = environment.TWILIO_FROM_NUMBER ?? environment.TWILIO_PHONE_NUMBER;
   const statusCallbackUrl = environment.MERIDIAN_SMS_STATUS_CALLBACK_URL;
-  if (!accountSid || !authToken || !from || !statusCallbackUrl) {
+  if (!accountSid || !authToken || !from) {
     return new UnconfiguredSmsProvider();
   }
   return new TwilioSmsProvider(accountSid, authToken, from, statusCallbackUrl);

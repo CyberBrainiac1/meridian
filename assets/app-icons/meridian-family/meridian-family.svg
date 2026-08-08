@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="MeridianFamily">
+  <title>MeridianFamily</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4FB3A6"/>
+      <stop offset="1" stop-color="#1F7A6E"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <path d="M512 168 L800 268 L800 536 C800 700 676 812 512 872 C348 812 224 700 224 536 L224 268 Z" fill="#ffffff" opacity="0.96"/>
+  <path d="M512 660 C512 660 372 574 372 476 C372 424 414 386 462 386 C488 386 512 400 512 400 C512 400 536 386 562 386 C610 386 652 424 652 476 C652 574 512 660 512 660 Z" fill="#1F7A6E"/>
+</svg>

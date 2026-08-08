@@ -26,7 +26,7 @@ import numpy as np
 from meridian_hub.alerting.alert_formatter import format_alert_message
 from meridian_hub.capture.camera_registry import CameraRecord, CameraRegistry
 from meridian_hub.events.event_engine import EventEngine
-from meridian_hub.face.body_description import HackClubVisionDescriber
+from meridian_hub.face.body_description import build_vision_describer
 from meridian_hub.face.embedding_encryption import EmbeddingEncryptor
 from meridian_hub.face.detector import select_best_detection, score_detection
 from meridian_hub.face.person_description import describe_person
@@ -100,19 +100,20 @@ def chain1_visitor(face_video):
     body_description = None
     body_description_model = None
     body_description_generated_at = None
-    if os.environ.get("HACKCLUB_AI_API_KEY"):
+    describer = build_vision_describer()
+    if describer is not None:
         # Best-effort: a vision outage/402 must not fail the visitor path.
-        body_result = HackClubVisionDescriber.from_settings().try_describe_person_photo(person_photo_bytes)
+        body_result = describer.try_describe_person_photo(person_photo_bytes)
         if body_result is not None:
             body_description = body_result.description
             body_description_model = body_result.model
             body_description_generated_at = body_result.generated_at
-            print(f"      Hack Club body description: \"{body_description}\"")
-            check("Hack Club vision generated a body/clothing description", bool(body_description))
+            print(f"      Vision body description ({body_description_model}): \"{body_description}\"")
+            check("vision provider generated a body/clothing description", bool(body_description))
         else:
-            print("      (Hack Club vision unavailable -- degraded gracefully, visitor path still works)")
+            print("      (vision unavailable -- degraded gracefully, visitor path still works)")
     else:
-        print("      (Hack Club vision skipped -- HACKCLUB_AI_API_KEY is not set)")
+        print("      (vision skipped -- neither GEMINI_API_KEY nor HACKCLUB_AI_API_KEY is set)")
 
     check("embedding round-trips through decrypt", encryptor.decrypt(enc_embedding) == best_detection.embedding)
     check("face image round-trips through decrypt", encryptor.decrypt_image(enc_image) == jpeg.tobytes())

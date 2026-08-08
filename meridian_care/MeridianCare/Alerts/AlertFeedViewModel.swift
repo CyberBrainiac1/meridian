@@ -11,6 +11,14 @@ final class AlertFeedViewModel: ObservableObject {
     private let client = SupabaseManager.client
     private let facilityId: String
     private var watchTask: Task<Void, Never>?
+    private var channel: RealtimeChannelV2?
+
+    /// Bounded backoff between re-join attempts, held at 30s rather than
+    /// growing without limit — a caregiver waiting on a fall alert can't be
+    /// parked behind a minutes-long retry interval.
+    private static let retryDelays: [Duration] = [
+        .seconds(1), .seconds(2), .seconds(4), .seconds(8), .seconds(15), .seconds(30)
+    ]
 
     init(facilityId: String) {
         self.facilityId = facilityId
@@ -28,6 +36,18 @@ final class AlertFeedViewModel: ObservableObject {
     func stop() {
         watchTask?.cancel()
         watchTask = nil
+        isConnected = false
+
+        // Cancelling the task on its own leaves the channel joined and still
+        // registered on the socket, so the next start() would hand back that
+        // same stale topic instead of a fresh join.
+        if let channel {
+            self.channel = nil
+            Task { [client] in
+                await channel.unsubscribe()
+                await client.removeChannel(channel)
+            }
+        }
     }
 
     /// Resident-first copy: prefer the incident's own `summary` (the seed
@@ -77,18 +97,67 @@ final class AlertFeedViewModel: ObservableObject {
 
     private func watchRealtime() async {
         let channel = client.channel("incident-events-\(facilityId)")
+        self.channel = channel
         let changes = channel.postgresChange(
             AnyAction.self,
             schema: "public",
             table: "incident_events",
             filter: .eq("facility_id", value: facilityId)
         )
-        await channel.subscribe()
-        isConnected = true
 
-        for await _ in changes {
-            await refresh()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [weak self] in
+                for await _ in changes {
+                    await self?.refresh()
+                }
+            }
+            group.addTask { [weak self] in
+                await self?.keepSubscribed(channel)
+            }
+            await group.waitForAll()
         }
+    }
+
+    /// Keeps the channel joined, and re-reads the feed every time it lands.
+    ///
+    /// Postgres Changes has no replay: an incident raised while this device
+    /// was offline is never delivered once the socket comes back, so it would
+    /// stay invisible until some later unrelated write happened to fire a
+    /// refresh. A full fetch on every successful (re)join is the only thing
+    /// that closes that gap. supabase-swift re-joins on its own after a socket
+    /// reconnect, but a join that fails outright leaves the channel
+    /// `.unsubscribed` with nothing retrying it — hence the backoff here.
+    private func keepSubscribed(_ channel: RealtimeChannelV2) async {
+        var attempt = 0
+
+        while !Task.isCancelled {
+            do {
+                // No-op when the channel is already subscribed, and coalesces
+                // with the library's own reconnect-driven join.
+                try await channel.subscribeWithError()
+            } catch {
+                isConnected = false
+                let delay = Self.retryDelays[min(attempt, Self.retryDelays.count - 1)]
+                attempt += 1
+                try? await Task.sleep(for: delay)
+                continue
+            }
+
+            attempt = 0
+            isConnected = true
+            await refresh()
+
+            // Park until the join is lost — a dropped socket, a server-side
+            // close, and the library's own reconnect reset all leave
+            // `.subscribed`.
+            for await status in channel.statusChange where status != .subscribed {
+                break
+            }
+            guard !Task.isCancelled else { break }
+            isConnected = false
+        }
+
+        isConnected = false
     }
 
     func manualRefresh() async {

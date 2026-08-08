@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     supabase_secret_key: str | None = None
     supabase_service_role_key: str | None = None
     meridian_supabase_service_role_key: str | None = None
+    # Primary vision provider: real Google Generative Language API.
+    gemini_api_key: str | None = None
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    # gemini-2.5-flash is closed to new API keys; the "-latest" flash alias
+    # is the current cheap multimodal model.
+    gemini_vision_model: str = "gemini-flash-latest"
+    gemini_timeout_seconds: float = 45.0
+    # Fallback vision provider: Hack Club AI proxy.
     hackclub_ai_api_key: str | None = None
     hackclub_ai_base_url: str = "https://ai.hackclub.com/proxy/v1"
     hackclub_ai_vision_model: str = "google/gemini-2.5-flash"

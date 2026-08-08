@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="MeridianHub">
+  <title>MeridianHub</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6E8FD8"/>
+      <stop offset="1" stop-color="#3B4FA0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <path d="M512 168 L800 268 L800 536 C800 700 676 812 512 872 C348 812 224 700 224 536 L224 268 Z" fill="#ffffff" opacity="0.96"/>
+  <path d="M512 356 L676 490 L676 660 L560 660 L560 566 L464 566 L464 660 L348 660 L348 490 Z" fill="#3B4FA0"/>
+</svg>
