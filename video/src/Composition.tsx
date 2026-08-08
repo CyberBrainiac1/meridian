@@ -39,6 +39,33 @@ const alertIcon = (color: string, size = 30) => (
   </svg>
 );
 
+// Persistent brand bug, top right. Sits above every beat so the reel is
+// attributable on any frame someone screenshots. Tint flips with the beat
+// underneath it: mint over the dark pose footage, brand blue over the light
+// app screens. Hidden only on the end card, which already carries the mark
+// full size.
+const BrandMark = () => {
+  const f = useCurrentFrame();
+  const onDark = f < 270;
+  const tint = onDark ? C.mint : C.primary;
+  // Fade out just before the end card takes over, so the two marks never
+  // appear at once.
+  const opacity = clamp(f, [0, 18, 795, 812], [0, 1, 1, 0]) * (onDark ? 0.92 : 0.8);
+  return (
+    <div style={{position: "absolute", top: 46, right: 56, zIndex: 20, opacity,
+                 display: "flex", alignItems: "center", gap: 12, pointerEvents: "none"}}>
+      <svg width={34} height={34} viewBox="0 0 1024 1024" aria-label="Meridian" style={{display: "block",
+           filter: onDark ? "drop-shadow(0 2px 6px rgba(0,0,0,.65))" : "none"}}>
+        <path d="M512 168 L800 268 L800 536 C800 700 676 812 512 872 C348 812 224 700 224 536 L224 268 Z"
+              fill="none" stroke={tint} strokeWidth={62} strokeLinejoin="round" />
+        <path d="M512 356 L676 490 L676 660 L560 660 L560 566 L464 566 L464 660 L348 660 L348 490 Z" fill={tint} />
+      </svg>
+      <span style={{fontSize: 23, fontWeight: 800, letterSpacing: 3, color: tint,
+                    textShadow: onDark ? "0 2px 6px rgba(0,0,0,.6)" : "none"}}>MERIDIAN</span>
+    </div>
+  );
+};
+
 const Panel = ({children, style}: {children: React.ReactNode; style?: React.CSSProperties}) => <div style={{background: C.surface, border: `1px solid ${C.border}`, borderRadius: 26, boxShadow: "0 18px 45px rgba(12,74,110,.11)", ...style}}>{children}</div>;
 const Pill = ({children, color = C.primary}: {children: React.ReactNode; color?: string}) => <span style={{background: `${color}18`, color, borderRadius: 99, padding: "10px 16px", fontWeight: 750, fontSize: 20}}>{children}</span>;
 
@@ -55,11 +82,23 @@ const FullVideo = ({src, opacity = 1, scale = 1, filter}: {src: string; opacity?
 
 const FallAndSkeleton = () => {
   const f = useCurrentFrame();
-  const dissolve = clamp(f, [120, 188], [0, 1]);
-  const caption = clamp(f, [188, 210, 252, 270], [0, 1, 1, 0]);
+  // Both layers MUST share one scale ramp. preprocess_frame does a plain
+  // resize rather than a letterbox, so pose coordinates map linearly onto the
+  // full source frame and the skeleton lands exactly on her body -- but only
+  // while the two layers are transformed identically.
+  const zoom = clamp(f, [0, 270], [1.02, 1.12]);
+  // Skeleton locks on while she is still upright, so the fall is watched being
+  // tracked rather than revealed after the fact.
+  const skeleton = clamp(f, [52, 96], [0, 1]);
+  // Only after the fall does the footage fall away, leaving pose alone on
+  // screen for the privacy line.
+  const videoBrightness = clamp(f, [186, 238], [0.56, 0.05]);
+  const caption = clamp(f, [196, 218, 252, 270], [0, 1, 1, 0]);
   return <AbsoluteFill style={{background: C.dark}}>
-    <FullVideo src="fall.mp4" scale={clamp(f, [0, 270], [1.02, 1.12])} filter="brightness(.56) saturate(.72) contrast(1.08)" />
-    <AbsoluteFill style={{opacity: dissolve}}><FullVideo src="skeleton.mp4" scale={clamp(f, [120, 270], [1.01, 1.08])} /></AbsoluteFill>
+    <FullVideo src="fall.mp4" scale={zoom} filter={`brightness(${videoBrightness}) saturate(.72) contrast(1.08)`} />
+    {/* screen blend drops the skeleton render's black background to fully
+        transparent, so the strokes composite straight onto her. */}
+    <AbsoluteFill style={{opacity: skeleton, mixBlendMode: "screen"}}><FullVideo src="skeleton.mp4" scale={zoom} /></AbsoluteFill>
     <AbsoluteFill style={{background: "radial-gradient(circle, transparent 44%, rgba(0,0,0,.32))"}} />
     <div style={{position: "absolute", left: 120, bottom: 110, opacity: caption, color: "white", fontSize: 56, fontWeight: 760, letterSpacing: -1.5, padding: "22px 30px", borderLeft: `5px solid ${C.mint}`, background: "rgba(5,6,10,.72)", borderRadius: "0 16px 16px 0"}}>No video ever leaves the building.</div>
   </AbsoluteFill>;
@@ -81,7 +120,7 @@ const CareScreen = () => {
       <h1 style={{fontSize: 42, margin: "4px 0 25px", letterSpacing: -1.2}}>Alerts</h1>
       <div style={{position: "relative", translate: `0 ${alertY}px`}}>
         <Panel style={{padding: 22, borderLeft: `7px solid ${C.destructive}`}}><div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}><Pill color={C.destructive}>Emergency</Pill>{alertIcon(C.destructive, 26)}</div>
-          <div style={{fontSize: 30, lineHeight: 1.22, fontWeight: 760, marginTop: 18}}>Maggie may need help.</div>
+          <div style={{fontSize: 30, lineHeight: 1.22, fontWeight: 760, marginTop: 18}}>Maggie may need help in Room 101.</div>
           <div style={{fontSize: 22, marginTop: 12, color: C.foregroundMuted}}>Fall detected</div>
           {!acknowledged && <button style={{marginTop: 22, border: 0, width: "100%", padding: "17px", borderRadius: 17, color: "white", fontWeight: 800, fontSize: 24, background: C.primary, position: "relative", overflow: "hidden"}}>Acknowledge<span style={{position:"absolute", left:"50%", top:"50%", marginLeft:-ripple/2, marginTop:-ripple/2, width:ripple, height:ripple, borderRadius:"50%", border:"3px solid rgba(255,255,255,.7)"}} /></button>}
           {acknowledged && <div style={{marginTop: 22}}><Pill color={responding ? C.success : C.warning}>{responding ? "Responding" : "Acknowledged"}</Pill>{!responding && <button style={{marginTop: 18, border: 0, width: "100%", padding: "17px", borderRadius: 17, color: "white", fontWeight: 800, fontSize: 24, background: C.primary}}>Mark responding</button>}</div>}
@@ -102,8 +141,8 @@ const HubScreen = ({visitor = false}: {visitor?: boolean}) => {
   </div></Background>;
 };
 
-const FamilyScreen = () => {const f=useCurrentFrame();const local=f;const notification=clamp(local,[8,26],[0,1]);const resolved=clamp(local,[82,105],[0,1]);return <Background><div style={{position:"absolute",left:250,top:195,width:540}}><div style={{fontSize:34,color:C.primaryAlt,fontWeight:720}}>MeridianFamily</div><div style={{fontSize:72,lineHeight:1.03,letterSpacing:-3,fontWeight:790,marginTop:18}}>Stay informed.<br/>Stay close.</div><div style={{fontSize:30,color:C.foregroundMuted,lineHeight:1.4,marginTop:30}}>Updates arrive in the family app—not as a text message.</div></div><div style={{position:"absolute",right:280,top:55}}><Device label="MeridianFamily updates"><div style={{padding:"75px 28px 42px"}}><h1 style={{fontSize:42,margin:"4px 0 22px"}}>Updates</h1><Panel style={{padding:24,opacity:notification,borderLeft:`7px solid ${C.warning}`}}><div style={{display:"flex",gap:15}}>{icon("◉",C.warning)}<div><div style={{fontSize:26,fontWeight:760,lineHeight:1.25}}>Maggie may need help.</div><div style={{fontSize:20,color:C.foregroundMuted,marginTop:8}}>Care team has been alerted.</div></div></div></Panel><div style={{marginTop:26,fontSize:22,fontWeight:750,color:C.foregroundMuted}}>STAFF RESPONSES</div><Panel style={{padding:24,marginTop:12,opacity:resolved}}><div style={{display:"flex",gap:15}}>{icon("✓",C.success)}<div><div style={{fontSize:26,fontWeight:760,lineHeight:1.25}}>A caregiver is responding.</div><div style={{fontSize:20,color:C.foregroundMuted,marginTop:8}}>Maggie is not alone.</div></div></div></Panel></div></Device></div></Background>};
+const FamilyScreen = () => {const f=useCurrentFrame();const local=f;const notification=clamp(local,[8,26],[0,1]);const resolved=clamp(local,[82,105],[0,1]);return <Background><div style={{position:"absolute",left:250,top:195,width:540}}><div style={{fontSize:34,color:C.primaryAlt,fontWeight:720}}>MeridianFamily</div><div style={{fontSize:72,lineHeight:1.03,letterSpacing:-3,fontWeight:790,marginTop:18}}>Stay informed.<br/>Stay close.</div><div style={{fontSize:30,color:C.foregroundMuted,lineHeight:1.4,marginTop:30}}>Updates arrive in the family app—not as a text message.</div></div><div style={{position:"absolute",right:280,top:55}}><Device label="MeridianFamily updates"><div style={{padding:"75px 28px 42px"}}><h1 style={{fontSize:42,margin:"4px 0 22px"}}>Updates</h1><Panel style={{padding:24,opacity:notification,borderLeft:`7px solid ${C.warning}`}}><div style={{display:"flex",gap:15}}>{icon("◉",C.warning)}<div><div style={{fontSize:26,fontWeight:760,lineHeight:1.25}}>Maggie may need help in Room 101.</div><div style={{fontSize:20,color:C.foregroundMuted,marginTop:8}}>Care team has been alerted.</div></div></div></Panel><div style={{marginTop:26,fontSize:22,fontWeight:750,color:C.foregroundMuted}}>STAFF RESPONSES</div><Panel style={{padding:24,marginTop:12,opacity:resolved}}><div style={{display:"flex",gap:15}}>{icon("✓",C.success)}<div><div style={{fontSize:26,fontWeight:760,lineHeight:1.25}}>A caregiver is responding.</div><div style={{fontSize:20,color:C.foregroundMuted,marginTop:8}}>Maggie is not alone.</div></div></div></Panel></div></Device></div></Background>};
 
 const EndCard = () => {const f=useCurrentFrame();const local=f;const o=clamp(local,[0,25],[0,1]);return <AbsoluteFill style={{background:`radial-gradient(circle at center, #12536b, ${C.dark} 70%)`,color:"white",justifyContent:"center",alignItems:"center",display:"flex"}}><div style={{textAlign:"center",opacity:o,scale:clamp(local,[0,40],[.94,1])}}><svg width={116} height={116} viewBox="0 0 1024 1024" style={{display:"block",margin:"0 auto 34px"}} aria-label="Meridian"><path d="M512 168 L800 268 L800 536 C800 700 676 812 512 872 C348 812 224 700 224 536 L224 268 Z" fill="none" stroke={C.mint} strokeWidth={46} strokeLinejoin="round" /><path d="M512 356 L676 490 L676 660 L560 660 L560 566 L464 566 L464 660 L348 660 L348 490 Z" fill={C.mint} /></svg><div style={{fontSize:76,fontWeight:790,letterSpacing:-3}}>Meridian</div><div style={{fontSize:49,fontWeight:650,marginTop:34,letterSpacing:-1.5}}>Faster help. Less uncertainty. More dignity.</div></div></AbsoluteFill>};
 
-export const MeridianDemo = () => <AbsoluteFill><Sequence durationInFrames={270}><FallAndSkeleton /></Sequence><Sequence from={270} durationInFrames={120}><CareScreen /></Sequence><Sequence from={390} durationInFrames={150}><HubScreen /></Sequence><Sequence from={540} durationInFrames={120}><HubScreen visitor /></Sequence><Sequence from={660} durationInFrames={150}><FamilyScreen /></Sequence><Sequence from={810} durationInFrames={90}><EndCard /></Sequence></AbsoluteFill>;
+export const MeridianDemo = () => <AbsoluteFill><Sequence durationInFrames={270}><FallAndSkeleton /></Sequence><Sequence from={270} durationInFrames={120}><CareScreen /></Sequence><Sequence from={390} durationInFrames={150}><HubScreen /></Sequence><Sequence from={540} durationInFrames={120}><HubScreen visitor /></Sequence><Sequence from={660} durationInFrames={150}><FamilyScreen /></Sequence><Sequence from={810} durationInFrames={90}><EndCard /></Sequence><BrandMark /></AbsoluteFill>;
