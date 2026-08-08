@@ -9,12 +9,19 @@ import {
   HeartHandshake,
   Loader2,
   PhoneCall,
+  Pill,
   ShieldCheck,
   UserRoundCheck,
 } from "lucide-react";
 import { answerVisitorPrompt, createAssistanceRequest } from "@/app/actions";
 import { createClient } from "@/lib/supabase/client";
-import type { AssistanceKind, HubAssistanceRequest, HubState, HubVisitorPrompt } from "@/lib/types";
+import type {
+  AssistanceKind,
+  HubAssistanceRequest,
+  HubMedicationDose,
+  HubState,
+  HubVisitorPrompt,
+} from "@/lib/types";
 
 const POLL_MS = 10_000;
 // A resident must never be left watching a control that never resolves. If the
@@ -23,6 +30,10 @@ const ACTION_TIMEOUT_MS = 15_000;
 // How long a finished request stays on screen so the resident actually reads
 // the outcome instead of the panel silently reverting under them.
 const TERMINAL_VISIBLE_MS = 90_000;
+// How far ahead of the scheduled time the reminder appears. Long enough that a
+// resident is not startled by a caregiver arriving unannounced, short enough
+// that the card is not standing there for hours saying nothing new.
+const MEDICATION_LEAD_MS = 30 * 60_000;
 
 type NoticeTone = "working" | "success" | "error";
 interface Notice {
@@ -82,27 +93,46 @@ function statusHeading(request: HubAssistanceRequest) {
   return "Your request was sent to the care team.";
 }
 
+/** The single dose worth mentioning: the earliest one still outstanding that is
+ *  either already due (or overdue) or coming up within the lead window. Doses
+ *  the care team has already given, refused, held or recorded as missed are not
+ *  the resident's to think about, so they never appear. */
+function dueMedication(doses: HubMedicationDose[], now: number) {
+  // now === 0 means the clock has not been adopted yet (first paint). Rendering
+  // nothing is correct there; the effect re-runs this a tick later.
+  if (now === 0) return undefined;
+  return doses
+    .filter((dose) => dose.status === "outstanding")
+    .sort((a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime())
+    .find((dose) => new Date(dose.scheduled_for).getTime() <= now + MEDICATION_LEAD_MS);
+}
+
 function kindLabel(kind: AssistanceKind) {
   if (kind === "emergency") return "Emergency help";
   if (kind === "family_contact") return "Call family";
   return "Assistance";
 }
 
-async function loadLiveState(): Promise<Pick<HubState, "assistanceRequests" | "visitorPrompts">> {
+async function loadLiveState(): Promise<
+  Pick<HubState, "assistanceRequests" | "visitorPrompts" | "medicationDoses">
+> {
   const supabase = createClient();
   // This turns expired prompts into no_response before reading. It is safe to
   // call repeatedly and means an old prompt never stays actionable on screen.
   const expiry = await supabase.rpc("expire_my_visitor_verification_prompts");
   if (expiry.error) throw expiry.error;
-  const [requests, prompts] = await Promise.all([
+  const [requests, prompts, medications] = await Promise.all([
     supabase.from("resident_hub_assistance_feed").select("*").order("requested_at", { ascending: false }),
     supabase.from("resident_hub_visitor_prompt_feed").select("*").order("prompted_at", { ascending: false }),
+    supabase.from("resident_hub_medication_feed").select("*").order("scheduled_for", { ascending: true }),
   ]);
   if (requests.error) throw requests.error;
   if (prompts.error) throw prompts.error;
+  if (medications.error) throw medications.error;
   return {
     assistanceRequests: requests.data as HubAssistanceRequest[],
     visitorPrompts: prompts.data as HubVisitorPrompt[],
+    medicationDoses: medications.data as HubMedicationDose[],
   };
 }
 
@@ -252,6 +282,7 @@ export function HubSurface({ initialState }: { initialState: HubState }) {
   const finished = request ? undefined : recentlyFinishedRequest(state.assistanceRequests, now);
   const prompt = state.visitorPrompts.find((item) => item.status === "pending");
   const shown = request ?? finished;
+  const medication = dueMedication(state.medicationDoses, now);
 
   return (
     <main className="hub-shell">
@@ -323,6 +354,8 @@ export function HubSurface({ initialState }: { initialState: HubState }) {
           />
         </section>
       )}
+
+      {medication && <MedicationReminder dose={medication} now={now} />}
 
       {prompt && (
         <VisitorVerification
@@ -418,6 +451,34 @@ function HelpStatus({ request }: { request: HubAssistanceRequest }) {
           You do not need to do anything else. Use the buttons below if you need help again.
         </p>
       )}
+    </section>
+  );
+}
+
+/** Purely informational, and deliberately so: residents here do not
+ *  self-administer, so there is no button, no confirmation and nothing to
+ *  dismiss. The card says what is about to happen and then stops talking.
+ *
+ *  It names no drug, dose or instruction — the feed does not carry them, and
+ *  this screen faces a shared room. If a resident wants that detail, a person
+ *  gives it to them. */
+function MedicationReminder({ dose, now }: { dose: HubMedicationDose; now: number }) {
+  const scheduledAt = new Date(dose.scheduled_for);
+  const due = scheduledAt.getTime() <= now;
+  const time = scheduledAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  return (
+    <section className="hub-card medication-card" aria-live="polite">
+      <p className="eyebrow">
+        <Pill aria-hidden="true" /> Medication
+      </p>
+      <h2 className="medication-heading">
+        {due ? "It's time for your medication." : "Your medication is coming up soon."}
+      </h2>
+      <p className="medication-copy">
+        A caregiver will bring it to you. There is nothing you need to do.
+      </p>
+      <p className="medication-time">Scheduled for {time}.</p>
     </section>
   );
 }

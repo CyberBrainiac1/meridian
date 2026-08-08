@@ -23,6 +23,13 @@ struct MeridianCareApp: App {
             .environmentObject(auth)
             .animation(.easeInOut(duration: MeridianMotion.duration), value: auth.state)
             .task { await auth.start() }
+            // MeridianColor is a fixed light palette with no dark-mode
+            // variants (Tokens.swift). Left to the system, Dark Mode swaps
+            // default/unstyled text (e.g. TextField) to white, which is
+            // invisible against these light, hardcoded backgrounds. Locking
+            // the scheme keeps every default control legible against the
+            // palette it was actually designed for.
+            .preferredColorScheme(.light)
         }
     }
 }

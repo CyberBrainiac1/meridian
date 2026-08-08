@@ -48,6 +48,15 @@ APPS = {
 # iOS asset-catalog sizes plus the web/PWA sizes the Hub needs.
 PNG_SIZES = [1024, 512, 256, 192, 180, 167, 152, 120, 87, 80, 76, 60, 58, 40, 32, 20]
 
+# apple-touch-icon, the PWA manifest, and native Xcode AppIcon assets all
+# expect a full-bleed opaque square -- the OS applies its own corner
+# rounding, so a pre-rounded, alpha-punched icon (what PNG_SIZES renders)
+# shows through to whatever is behind it instead of the intended background
+# colour. These sizes get a second, square-cornered render with no alpha
+# channel. 1024 is Xcode's single-size AppIcon requirement (Xcode 14+); Apple
+# rejects an AppIcon asset that has an alpha channel, which square=True drops.
+PWA_SIZES = [1024, 512, 192, 180, 32, 16]
+
 CANVAS = 1024
 
 
@@ -201,7 +210,7 @@ def _draw_glyph(draw, kind: str, scale: float, colour: tuple[int, int, int]) -> 
     # the caller overlay. Simpler: draw door in white.
 
 
-def render_png(name: str, spec: dict, size: int) -> None:
+def render_png(name: str, spec: dict, size: int, *, square: bool = False) -> None:
     from PIL import Image, ImageDraw
 
     supersample = 4 if size <= 256 else 2
@@ -227,9 +236,18 @@ def render_png(name: str, spec: dict, size: int) -> None:
         )
     base = Image.alpha_composite(base, glyph_layer)
 
-    base.putalpha(_rounded_rect_mask(work, round(224 * scale)))
+    if square:
+        # Full-bleed, opaque, no rounded-corner alpha: the platform (iOS
+        # home screen, PWA manifest renderer) applies its own mask on top.
+        base = base.convert("RGB")
+        out_dir = OUT_DIR / name / "pwa"
+        out_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        base.putalpha(_rounded_rect_mask(work, round(224 * scale)))
+        out_dir = OUT_DIR / name
+
     final = base.resize((size, size), Image.LANCZOS)
-    final.save(OUT_DIR / name / f"{name}-{size}.png")
+    final.save(out_dir / f"{name}-{size}.png")
 
 
 def main() -> None:
@@ -244,7 +262,12 @@ def main() -> None:
         svg_path.write_text(build_svg(name, spec))
         for size in PNG_SIZES:
             render_png(name, spec, size)
-        print(f"{spec['label']}: {svg_path.relative_to(REPO_ROOT)} + {len(PNG_SIZES)} PNG sizes")
+        for size in PWA_SIZES:
+            render_png(name, spec, size, square=True)
+        print(
+            f"{spec['label']}: {svg_path.relative_to(REPO_ROOT)} + "
+            f"{len(PNG_SIZES)} PNG sizes + {len(PWA_SIZES)} PWA (square) sizes"
+        )
 
     print(f"\nIcons written to {OUT_DIR.relative_to(REPO_ROOT)}/")
 

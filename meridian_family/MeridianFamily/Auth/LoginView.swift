@@ -26,6 +26,8 @@ struct LoginView: View {
 
                 VStack(spacing: MeridianSpacing.sm) {
                     TextField("Email", text: $auth.email)
+                        .foregroundStyle(MeridianColor.foreground)
+                        .tint(MeridianColor.primaryAlt)
                         .textContentType(.username)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
@@ -40,6 +42,8 @@ struct LoginView: View {
                         .accessibilityLabel("Email")
 
                     SecureField("Password", text: $auth.password)
+                        .foregroundStyle(MeridianColor.foreground)
+                        .tint(MeridianColor.primaryAlt)
                         .textContentType(.password)
                         .focused($focusedField, equals: .password)
                         .submitLabel(.go)

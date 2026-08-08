@@ -7,6 +7,7 @@ struct RootView: View {
     @EnvironmentObject var auth: AuthViewModel
     @StateObject private var visitorBanner: VisitorBannerViewModel
     @StateObject private var alertFeed: AlertFeedViewModel
+    @StateObject private var medicationWatcher: MedicationWatcher
     @State private var dismissedUrgentIds: Set<String> = []
     @State private var pendingOpenIncidentId: String?
     @State private var selectedTab: Tab = .alerts
@@ -19,6 +20,7 @@ struct RootView: View {
         self.role = role
         _visitorBanner = StateObject(wrappedValue: VisitorBannerViewModel(facilityId: facilityId))
         _alertFeed = StateObject(wrappedValue: AlertFeedViewModel(facilityId: facilityId))
+        _medicationWatcher = StateObject(wrappedValue: MedicationWatcher(facilityId: facilityId))
     }
 
     /// The first open, non-info incident not yet dismissed from the urgent
@@ -81,12 +83,19 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: MeridianMotion.duration), value: urgentIncident?.id)
         .task {
+            AlertNotificationService.shared.onOpenIncident = { incidentId in
+                selectedTab = .alerts
+                pendingOpenIncidentId = incidentId
+            }
+            AlertNotificationService.shared.requestAuthorizationAndRegisterCategory()
             visitorBanner.start()
             alertFeed.start()
+            medicationWatcher.start()
         }
         .onDisappear {
             visitorBanner.stop()
             alertFeed.stop()
+            medicationWatcher.stop()
         }
     }
 }

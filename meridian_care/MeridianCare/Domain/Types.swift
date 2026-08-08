@@ -134,6 +134,21 @@ struct ResidentProfile: Codable, Identifiable, Equatable {
     let displayName: String
     let riskFlags: [String]
     let careNotes: String?
+    /// Clinical detail added alongside the medication/handoff work. All
+    /// optional: these columns are nullable, and a facility part-way through
+    /// onboarding will legitimately have residents without them — decoding
+    /// must not fail just because a profile is incomplete.
+    /// Held as the raw "YYYY-MM-DD" string, not a Date: Postgres `date` has
+    /// no time or zone component, so it does not parse with the ISO8601
+    /// datetime strategy the rest of these models decode under.
+    let dateOfBirth: String?
+    let dietaryNeeds: String?
+    let allergies: [String]?
+    let codeStatus: CodeStatus?
+    let mobilityStatus: String?
+    let communicationNotes: String?
+
+    var age: Int? { dateOfBirth.flatMap(MeridianFormat.age(fromISODate:)) }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -143,6 +158,12 @@ struct ResidentProfile: Codable, Identifiable, Equatable {
         case displayName = "display_name"
         case riskFlags = "risk_flags"
         case careNotes = "care_notes"
+        case dateOfBirth = "date_of_birth"
+        case dietaryNeeds = "dietary_needs"
+        case allergies
+        case codeStatus = "code_status"
+        case mobilityStatus = "mobility_status"
+        case communicationNotes = "communication_notes"
     }
 }
 

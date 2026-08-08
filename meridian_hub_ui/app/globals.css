@@ -30,7 +30,18 @@
 
 * { box-sizing: border-box; }
 html { color-scheme: light; }
-body { margin: 0; min-height: 100vh; background: var(--background); color: var(--foreground); font-family: "Noto Sans", Arial, sans-serif; font-size: 22px; line-height: 1.5; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Noto Sans", Arial, sans-serif;
+  font-size: 22px;
+  line-height: 1.5;
+  /* In standalone (home-screen app) mode there's no Safari chrome pushing
+     content clear of the status bar or the rounded corners/home indicator. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
 button, input { font: inherit; }
 button { cursor: pointer; }
 button[aria-busy="true"] { cursor: progress; }
@@ -84,6 +95,15 @@ button[aria-busy="true"] { cursor: progress; }
 .notice.working { border-color: var(--primary); color: var(--primary); }
 .notice svg { flex: none; margin-top: 2px; }
 .connection { margin: 20px 0; padding: 20px; border: 4px solid var(--warning); border-radius: 14px; color: var(--warning); background: #fff; font-weight: 700; font-size: 24px; display: flex; align-items: flex-start; gap: 14px; }
+
+/* Informational only — no control, so this reads as calm rather than urgent:
+   the softer border tone deliberately does not compete with the emergency and
+   visitor cards. Text stays at full opacity and full size. */
+.medication-card { margin-top: 24px; padding: 28px; border-color: var(--border-soft); border-left: 12px solid var(--primary); }
+.medication-heading { font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.15; margin: 0; }
+.medication-copy { font-size: 24px; line-height: 1.4; margin: 16px 0 0; }
+.medication-time { font-size: 22px; font-weight: 700; color: var(--foreground-muted); margin: 12px 0 0; }
+.medication-card .eyebrow svg { width: 30px; height: 30px; }
 
 .visitor-card { margin-top: 24px; padding: 28px; border: 5px solid var(--primary); }
 .visitor-card h2 { font-size: clamp(1.9rem, 4vw, 2.75rem); line-height: 1.1; margin: 0; }

@@ -88,8 +88,23 @@ final class AlertFeedViewModel: ObservableObject {
                 .order("detected_at", ascending: false)
                 .execute()
                 .value
+
+            // Same trigger condition as RootView's urgentIncident: open and
+            // above info severity. Diffed against the ids already on screen,
+            // not against AlertNotificationService's own dedupe set, so this
+            // stays correct even on the very first refresh after launch —
+            // nothing "already on screen" counts as newly appeared.
+            let previouslySeenIds = Set(incidents.map(\.id))
+            let newlyAppeared = rows.filter {
+                !previouslySeenIds.contains($0.id) && $0.status == .open && $0.severity != .info
+            }
+
             incidents = rows
             errorMessage = nil
+
+            for incident in newlyAppeared {
+                AlertNotificationService.shared.notify(for: incident, copy: copy(for: incident))
+            }
         } catch {
             errorMessage = "Couldn't load alerts. Pull to retry."
         }
