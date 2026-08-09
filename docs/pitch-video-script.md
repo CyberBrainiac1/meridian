@@ -7,7 +7,16 @@ rendered by `cd video && npm run render` to `video/out/meridian-demo.mp4`.
 
 Global rules:
 
-- **1920×1080, 30fps, 870 frames, no audio track** (scored/voiced live on stage).
+- **1920×1080, 30fps, 870 frames.** Audio: `video/public/music.mp3` —
+  AKTASOK, "Hopeful Ambient Background", Pixabay Content License (commercial
+  use, no attribution). Volume envelope follows the story: in by 1s at 0.30,
+  pulled to 0.18 across the fall, risen to 0.40 through the app beats, silent
+  by frame 862.
+- **Narrative connectors (user direction):** each app beat opens with a role
+  chip — FOR CAREGIVERS / FOR RESIDENTS / FOR FAMILIES — and its sub-line
+  states how the beat follows from the fall, so a first-time viewer reads one
+  causal story, not four unrelated screens. Beat 1 carries the bridge caption
+  "Only the alert does — here is where it goes." under the privacy line.
 - **No numbers on screen** except "Room 101" (a name, not a metric).
 - Persistent brand mark top-right on every beat (mint on dark, brand blue on
   light), fading 826→840 so it never coexists with the end card.
@@ -140,15 +149,15 @@ Living."** Fade in 0–9, hold to 870. Nothing animates after frame 852.
 
 | Surface | Line |
 |---|---|
-| B1 caption | No video ever leaves the building. |
-| B2 headline | Care, in sync. / One clear alert. One clear response. |
+| B1 caption | No video ever leaves the building. / Only the alert does — here is where it goes. |
+| B2 headline | FOR CAREGIVERS / Care, in sync. / The instant Maggie falls, her care team knows. |
 | B2 alert | Maggie may need help in Room 101. / Fall detected |
 | B2 states | Acknowledge → Acknowledged → Mark responding → Responding / Care team is responding. |
-| B3 headline | Help is on the way. / The resident sees every step clearly. |
+| B3 headline | FOR RESIDENTS / Help is on the way. / And Maggie sees it too — every step, from her own room. |
 | B3 panel | Help is coming. A caregiver is on the way. (+3 progress rows) |
-| B4 headline | Your voice matters. / A calm choice for an unexpected visitor. |
+| B4 headline | FOR RESIDENTS / Your voice matters. / Not just falls — an unexpected visitor is Maggie's call to make. |
 | B4 panel | Is this person expected? / Someone we do not recognise was seen at the entrance. / Yes, expected / No, get help |
-| B5 headline | Stay informed. Stay close. / Updates arrive in the family app—not as a text message. |
+| B5 headline | FOR FAMILIES / Stay informed. Stay close. / And her family watches the same story — including how it ends. |
 | B5 cards | Maggie may need help in Room 101. / Care team has been alerted. / A caregiver is responding. / Maggie is not alone. |
 | B6 | MERIDIAN / The Care Intelligence Layer for Senior Living |
 

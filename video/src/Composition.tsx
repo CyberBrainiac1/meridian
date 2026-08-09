@@ -1,6 +1,7 @@
 import React from "react";
 import {
   AbsoluteFill,
+  Audio,
   Easing,
   interpolate,
   interpolateColors,
@@ -105,6 +106,14 @@ const Pill = ({children, color = C.primary}: {children: React.ReactNode; color?:
 const Ripple = ({size, opacity}: {size: number; opacity: number}) => <span style={{position: "absolute", left: "50%", top: "50%", marginLeft: -size / 2, marginTop: -size / 2, width: size, height: size, borderRadius: "50%", border: "3px solid rgba(255,255,255,.7)", opacity, pointerEvents: "none"}} />;
 // The app name outranks the tagline: it is the thing the audience must retain.
 const AppName = ({children}: {children: React.ReactNode}) => <div style={{fontSize: 42, fontWeight: 880, color: C.appName, letterSpacing: -0.8}}>{children}</div>;
+// Who this screen belongs to. A first-time viewer has no idea the three
+// surfaces are three different audiences; the chip says it before the app
+// name does.
+const RoleChip = ({children}: {children: React.ReactNode}) => <div style={{display: "inline-block", marginBottom: 16, padding: "8px 16px", borderRadius: 99, background: `${C.primary}14`, border: `1.5px solid ${C.primary}45`, color: C.primary, fontSize: 19, fontWeight: 800, letterSpacing: 2.2}}>{children}</div>;
+// The causal thread. Each beat's sub-line states how it follows from the
+// fall the viewer just watched, so the reel reads as one story instead of
+// four unrelated screens.
+const StoryLine = ({children}: {children: React.ReactNode}) => <div style={{marginTop: 30, fontSize: 31, color: C.foregroundMuted, lineHeight: 1.4}}>{children}</div>;
 
 const Device = ({children, label}: {children: React.ReactNode; label: string}) => <div aria-label={label} style={{width: 560, height: 970, padding: 15, background: "#102833", borderRadius: 64, boxShadow: "0 40px 90px rgba(0,0,0,.28)", border: "3px solid #31505d"}}>
   <div style={{height: "100%", overflow: "hidden", borderRadius: 49, background: C.background, position: "relative"}}>
@@ -137,6 +146,7 @@ const FallAndSkeleton = () => {
   const videoBrightness = ramp(f, [100, 132], [0.56, 0.05]);
   const caption = ramp(f, [96, 120], [0, 1]);
   const captionY = clamp(f, [96, 120], [14, 0]);
+  const bridge = ramp(f, [128, 148], [0, 1]);
   // 12f fade up from black, then the 7f dip that hands over to MeridianCare.
   const beat = ramp(f, [0, 12, 163, 170], [0, 1, 1, 0]);
   return <AbsoluteFill style={{background: C.dark, opacity: beat}}>
@@ -146,6 +156,9 @@ const FallAndSkeleton = () => {
     <AbsoluteFill style={{opacity: skeleton, mixBlendMode: "screen"}}><FullVideo src="skeleton.mp4" startFrom={CLIP_START} scale={zoom} /></AbsoluteFill>
     <AbsoluteFill style={{background: "radial-gradient(circle, transparent 44%, rgba(0,0,0,.32))"}} />
     <div style={{position: "absolute", left: 120, bottom: 110, opacity: caption, translate: `0 ${captionY}px`, color: "white", fontSize: 56, fontWeight: 760, letterSpacing: -1.5, padding: "22px 30px", borderLeft: `5px solid ${C.mint}`, background: "rgba(5,6,10,.72)", borderRadius: "0 16px 16px 0"}}>No video ever leaves the building.</div>
+    {/* The bridge into the app beats: video stays, the alert travels. Without
+        this line a first-time viewer has no idea why phone screens follow. */}
+    <div style={{position: "absolute", left: 125, bottom: 44, opacity: bridge, color: C.mint, fontSize: 37, fontWeight: 700, letterSpacing: -0.5, padding: "6px 30px"}}>Only the alert does — here is where it goes.</div>
   </AbsoluteFill>;
 };
 
@@ -167,8 +180,9 @@ const CareScreen = () => {
   const screenY = clamp(local, [118, 140], [0, -145]);
   const responsePanel = ramp(local, [118, 140], [0, 1]);
   return <Background opacity={beat}><div style={{position: "absolute", left: 255, top: 177, width: 560}}>
+    <RoleChip>FOR CAREGIVERS</RoleChip>
     <AppName>MeridianCare</AppName><div style={{fontSize: 73, letterSpacing: -3, fontWeight: 780, marginTop: 14}}>Care, in sync.</div>
-    <div style={{marginTop: 30, fontSize: 31, color: C.foregroundMuted, lineHeight: 1.4}}>One clear alert. One clear response.</div>
+    <StoryLine>The instant Maggie falls, her care team knows.</StoryLine>
   </div><div style={{position: "absolute", right: 270, top: 55, translate: `0 ${phoneY}px`}}><Device label="MeridianCare caregiver alerts">
     <div style={{padding: "72px 28px 102px", height: "100%", translate: `0 ${screenY}px`}}>
       <h1 style={{fontSize: 42, margin: "4px 0 25px", letterSpacing: -1.2}}>Alerts</h1>
@@ -192,6 +206,7 @@ const CareScreen = () => {
 const HubFrame = ({title, sub, bgOpacity, contentOpacity, panelX, children}: {title: string; sub: string; bgOpacity: number; contentOpacity: number; panelX: number; children: React.ReactNode}) => (
   <Background opacity={bgOpacity}>
     <div style={{position: "absolute", left: 155, top: 160, width: 580, opacity: contentOpacity}}>
+      <RoleChip>FOR RESIDENTS</RoleChip>
       <AppName>MeridianHub</AppName>
       <div style={{fontSize: 71, fontWeight: 790, lineHeight: 1.05, letterSpacing: -3, marginTop: 18}}>{title}</div>
       <div style={{fontSize: 30, color: C.foregroundMuted, lineHeight: 1.38, marginTop: 28}}>{sub}</div>
@@ -218,7 +233,7 @@ const HubHelpScreen = () => {
   const panelScale = clamp(local, [10, 26], [0.97, 1]);
   const panelIn = ramp(local, [10, 26], [0, 1]);
   const emergency = ramp(local, [80, 95], [0, 1]);
-  return <HubFrame title="Help is on the way." sub="The resident sees every step clearly." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
+  return <HubFrame title="Help is on the way." sub="And Maggie sees it too — every step, from her own room." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
     <Panel style={{padding: 30, marginTop: 32, border: "2px solid #b6efd8", background: "#f3fdf8", opacity: panelIn, scale: panelScale}}>
       <div style={{display: "flex", alignItems: "center", gap: 9, fontWeight: 800, color: C.success, fontSize: 20, letterSpacing: 1}}>{svgIcon(PATH_STATUS, C.success, 22)}<span>HELP STATUS</span></div>
       <h2 style={{fontSize: 34, lineHeight: 1.15, margin: "14px 0 22px"}}>Help is coming. A caregiver is on the way.</h2>
@@ -251,7 +266,7 @@ const HubVisitorScreen = () => {
   const rippleFade = ramp(local, [84, 92], [1, 0]);
   const brighten = clamp(local, [76, 92], [1, 1.22]);
   const answer = ramp(local, [92, 110], [0, 1]);
-  return <HubFrame title="Your voice matters." sub="A calm choice for an unexpected visitor." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
+  return <HubFrame title="Your voice matters." sub="Not just falls — an unexpected visitor is Maggie's call to make." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
     <Panel style={{padding: 30, marginTop: 32, border: "2px solid #bae6fd"}}>
       <div style={{display: "flex", alignItems: "center", gap: 9, fontWeight: 800, color: C.primary, fontSize: 20, letterSpacing: 1}}>{svgIcon(PATH_VISITOR, C.primary, 22)}<span>VISITOR CHECK</span></div>
       <h2 style={{fontSize: 37, lineHeight: 1.1, margin: "14px 0"}}>Is this person expected?</h2>
@@ -283,9 +298,10 @@ const FamilyScreen = () => {
   const toNavy = ramp(raw, [181, 187], [0, 1]);
   return <Background>
     <div style={{position: "absolute", left: 250, top: 195, width: 540, opacity: contentOpacity}}>
+      <RoleChip>FOR FAMILIES</RoleChip>
       <AppName>MeridianFamily</AppName>
       <div style={{fontSize: 72, lineHeight: 1.03, letterSpacing: -3, fontWeight: 790, marginTop: 18}}>Stay informed.<br />Stay close.</div>
-      <div style={{fontSize: 30, color: C.foregroundMuted, lineHeight: 1.4, marginTop: 30}}>Updates arrive in the family app—not as a text message.</div>
+      <StoryLine>And her family watches the same story — including how it ends.</StoryLine>
     </div>
     <div style={{position: "absolute", right: 280, top: 55, opacity: contentOpacity, translate: `0 ${phoneY}px`}}><Device label="MeridianFamily updates">
       <div style={{padding: "75px 28px 42px"}}>
@@ -331,7 +347,19 @@ const EndCard = () => {
 
 // End card is one second flat -- stage time belongs to the product beats,
 // which each gained time when it shrank.
+// Score: Pixabay Content License (AKTASOK, "Hopeful Ambient Background") --
+// free for commercial use, no attribution required, downloaded to
+// public/music.mp3. The envelope follows the story, not the clock: present
+// under the night footage, pulled back for the fall so the track never feels
+// cheerful over a person on the floor, rising through the app beats as the
+// story resolves, gone by the end card.
+const musicVolume = (f: number) =>
+  interpolate(f, [0, 30, 80, 130, 200, 800, 862], [0, 0.3, 0.18, 0.18, 0.4, 0.4, 0], {
+    extrapolateLeft: "clamp", extrapolateRight: "clamp",
+  });
+
 export const MeridianDemo = () => <AbsoluteFill style={{background: C.dark}}>
+  <Audio src={staticFile("music.mp3")} volume={musicVolume} />
   <Sequence durationInFrames={T.fallEnd} style={{zIndex: 6}}><FallAndSkeleton /></Sequence>
   <Sequence from={T.careFrom} durationInFrames={T.careDur} style={{zIndex: 5}}><CareScreen /></Sequence>
   <Sequence from={T.hubFrom} durationInFrames={T.hubDur} style={{zIndex: 4}}><HubHelpScreen /></Sequence>
