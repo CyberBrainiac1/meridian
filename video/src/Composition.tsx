@@ -108,11 +108,11 @@ const Pill = ({children, color = C.primary}: {children: React.ReactNode; color?:
 // a second later, which reads as a rendering artefact rather than a press.
 const Ripple = ({size, opacity}: {size: number; opacity: number}) => <span style={{position: "absolute", left: "50%", top: "50%", marginLeft: -size / 2, marginTop: -size / 2, width: size, height: size, borderRadius: "50%", border: "3px solid rgba(255,255,255,.7)", opacity, pointerEvents: "none"}} />;
 // The app name outranks the tagline: it is the thing the audience must retain.
-const AppName = ({children}: {children: React.ReactNode}) => <div style={{fontSize: 42, fontWeight: 880, color: C.appName, letterSpacing: -0.8}}>{children}</div>;
-// Who this screen belongs to. A first-time viewer has no idea the three
-// surfaces are three different audiences; the chip says it before the app
-// name does.
-const RoleChip = ({children}: {children: React.ReactNode}) => <div style={{display: "inline-block", marginBottom: 16, padding: "8px 16px", borderRadius: 99, background: `${C.primary}14`, border: `1.5px solid ${C.primary}45`, color: C.primary, fontSize: 19, fontWeight: 800, letterSpacing: 2.2}}>{children}</div>;
+const AppName = ({children}: {children: React.ReactNode}) => <div style={{fontSize: 58, fontWeight: 880, color: C.appName, letterSpacing: -1.4}}>{children}</div>;
+// Who this screen belongs to, as part of the header lockup itself -- a
+// first-time viewer reads "MeridianFamily / FOR WORRIED FAMILIES" as one
+// unit. (Was a small pill; user direction: make it header-scale.)
+const AudienceLine = ({children}: {children: React.ReactNode}) => <div style={{marginTop: 8, fontSize: 30, fontWeight: 800, color: C.primary, letterSpacing: 1.6, textTransform: "uppercase"}}>{children}</div>;
 // The causal thread. Each beat's sub-line states how it follows from the
 // fall the viewer just watched, so the reel reads as one story instead of
 // four unrelated screens.
@@ -183,8 +183,9 @@ const CareScreen = () => {
   const screenY = clamp(local, [118, 140], [0, -145]);
   const responsePanel = ramp(local, [118, 140], [0, 1]);
   return <Background opacity={beat}><div style={{position: "absolute", left: 255, top: 177, width: 560}}>
-    <RoleChip>FOR CAREGIVERS</RoleChip>
-    <AppName>MeridianCare</AppName><div style={{fontSize: 73, letterSpacing: -3, fontWeight: 780, marginTop: 14}}>Care, in sync.</div>
+    <AppName>MeridianCare</AppName>
+    <AudienceLine>For night-shift caregivers</AudienceLine>
+    <div style={{fontSize: 54, letterSpacing: -2, fontWeight: 760, marginTop: 26}}>Care, in sync.</div>
     <StoryLine>The instant Maggie falls, her care team knows.</StoryLine>
   </div><div style={{position: "absolute", right: 270, top: 55, translate: `0 ${phoneY}px`}}><Device label="MeridianCare caregiver alerts">
     <div style={{padding: "72px 28px 102px", height: "100%", translate: `0 ${screenY}px`}}>
@@ -209,9 +210,9 @@ const CareScreen = () => {
 const HubFrame = ({title, sub, bgOpacity, contentOpacity, panelX, children}: {title: string; sub: string; bgOpacity: number; contentOpacity: number; panelX: number; children: React.ReactNode}) => (
   <Background opacity={bgOpacity}>
     <div style={{position: "absolute", left: 155, top: 160, width: 580, opacity: contentOpacity}}>
-      <RoleChip>FOR RESIDENTS</RoleChip>
       <AppName>MeridianHub</AppName>
-      <div style={{fontSize: 71, fontWeight: 790, lineHeight: 1.05, letterSpacing: -3, marginTop: 18}}>{title}</div>
+      <AudienceLine>For residents like Maggie</AudienceLine>
+      <div style={{fontSize: 54, fontWeight: 760, lineHeight: 1.08, letterSpacing: -2, marginTop: 26}}>{title}</div>
       <div style={{fontSize: 30, color: C.foregroundMuted, lineHeight: 1.38, marginTop: 28}}>{sub}</div>
     </div>
     <div style={{position: "absolute", right: 215, top: 100, width: 770, minHeight: 850, padding: 52, borderRadius: 42, background: C.surface, boxShadow: "0 30px 80px rgba(12,74,110,.18)", opacity: contentOpacity, translate: `${panelX}px 0`}}>
@@ -301,9 +302,9 @@ const FamilyScreen = () => {
   const toNavy = ramp(raw, [181, 187], [0, 1]);
   return <Background>
     <div style={{position: "absolute", left: 250, top: 195, width: 540, opacity: contentOpacity}}>
-      <RoleChip>FOR FAMILIES</RoleChip>
       <AppName>MeridianFamily</AppName>
-      <div style={{fontSize: 72, lineHeight: 1.03, letterSpacing: -3, fontWeight: 790, marginTop: 18}}>Stay informed.<br />Stay close.</div>
+      <AudienceLine>For worried families</AudienceLine>
+      <div style={{fontSize: 54, lineHeight: 1.08, letterSpacing: -2, fontWeight: 760, marginTop: 26}}>Stay informed.<br />Stay close.</div>
       <StoryLine>And her family watches the same story — including how it ends.</StoryLine>
     </div>
     <div style={{position: "absolute", right: 280, top: 55, opacity: contentOpacity, translate: `0 ${phoneY}px`}}><Device label="MeridianFamily updates">
