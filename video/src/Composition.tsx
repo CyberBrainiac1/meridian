@@ -161,7 +161,7 @@ const FallAndSkeleton = () => {
     <div style={{position: "absolute", left: 120, bottom: 110, opacity: caption, translate: `0 ${captionY}px`, color: "white", fontSize: 56, fontWeight: 760, letterSpacing: -1.5, padding: "22px 30px", borderLeft: `5px solid ${C.mint}`, background: "rgba(5,6,10,.72)", borderRadius: "0 16px 16px 0"}}>No video ever leaves the building.</div>
     {/* The bridge into the app beats: video stays, the alert travels. Without
         this line a first-time viewer has no idea why phone screens follow. */}
-    <div style={{position: "absolute", left: 125, bottom: 44, opacity: bridge, color: C.mint, fontSize: 37, fontWeight: 700, letterSpacing: -0.5, padding: "6px 30px"}}>Only the alert does — here is where it goes.</div>
+    <div style={{position: "absolute", left: 125, bottom: 60, opacity: bridge, color: C.mint, fontSize: 37, fontWeight: 700, letterSpacing: -0.5, padding: "6px 30px"}}>Only the alert does — here is where it goes.</div>
   </AbsoluteFill>;
 };
 
