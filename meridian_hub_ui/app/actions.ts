@@ -23,3 +23,12 @@ export async function answerVisitorPrompt(promptId: string, response: "approved"
   });
   return error ? { error: "We could not save your answer. Please use the room call button or call care staff." } : {};
 }
+
+export async function reportMedicationTaken(medicationId: string, scheduledFor: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("resident_report_medication_taken", {
+    p_medication_id: medicationId,
+    p_scheduled_for: scheduledFor,
+  });
+  return error ? { error: "We could not save that. Please tell a caregiver directly." } : {};
+}
