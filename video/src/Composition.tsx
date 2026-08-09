@@ -253,7 +253,7 @@ const FullVideo = ({src, startFrom, scale = 1, filter, playbackRate}: {src: stri
 const DarkCaption = ({opacity, y, privacy, bridge}: {opacity: number; y: number; privacy: number; bridge: number}) => (
   <div style={{position: "absolute", left: 120, bottom: 150, translate: `0 ${y}px`, opacity}}>
     <div style={{opacity: privacy, color: "white", fontSize: 56, fontWeight: 760, letterSpacing: -1.5, padding: "22px 30px", borderLeft: `5px solid ${C.mint}`, background: "rgba(5,6,10,.72)", borderRadius: "0 16px 16px 0"}}>No video ever leaves the building.</div>
-    <div style={{opacity: bridge, marginTop: 16, marginLeft: 5, color: C.mint, fontSize: 37, fontWeight: 700, letterSpacing: -0.5, padding: "0 30px"}}>Only the alert does — here is where it goes.</div>
+    <div style={{opacity: bridge, marginTop: 16, marginLeft: 5, color: C.mint, fontSize: 37, fontWeight: 700, letterSpacing: -0.5, padding: "0 30px"}}>Only the alert does. Here is where it goes.</div>
   </div>
 );
 
@@ -307,12 +307,12 @@ const FallAndSkeleton = () => {
 const PIPE_X = [220, 700, 1180, 1660];
 const PIPE_Y = 660;
 const PIPE_NODES = [
-  {at: 8, label: "CAMERA", sub: "Continuous on-site capture", glyph: GLYPH_CAMERA},
+  {at: 8, label: "CAMERA", sub: "Always watching, right inside the building", glyph: GLYPH_CAMERA},
   // "17-point" stays numeric. The no-digits rule targets METRICS a judge would
   // ask us to source -- latency, room counts, ARR. This is a product
   // descriptor, it is the deck's own slide-6 wording, and "Seventeen-point"
   // reads as an affectation.
-  {at: 32, label: "ON-DEVICE POSE", sub: "17-point skeleton, no cloud round-trip", glyph: GLYPH_CPU},
+  {at: 32, label: "POSE READ ON SITE", sub: "A skeleton of 17 points, read right here in the room", glyph: GLYPH_CPU},
   {at: 60, label: "FALL STATE MACHINE", sub: "", glyph: GLYPH_ACTIVITY},
   {at: 90, label: "ALERT DISPATCHED", sub: "Only the alert leaves the room", glyph: GLYPH_BELL},
 ];
@@ -436,7 +436,7 @@ const CareScreen = () => {
   const responseY = clamp(local, [114, 136], [22, 0]);
   return <Background opacity={beat}><div style={{position: "absolute", left: 205, top: 150, width: 790}}>
     <AppName>MeridianCare</AppName>
-    <AudienceLine>For night-shift caregivers</AudienceLine>
+    <AudienceLine>For caregivers working the night shift</AudienceLine>
     <div style={{fontSize: 44, letterSpacing: -1.5, fontWeight: 780, marginTop: 26}}>Care, in sync.</div>
     <StoryLine>The instant Maggie falls, her care team knows.</StoryLine>
   </div><div style={{position: "absolute", right: 270, top: 55, translate: `0 ${phoneY}px`}}><Device label="MeridianCare caregiver alerts">
@@ -564,7 +564,7 @@ const HubHelpScreen = () => {
   // Two of four rows done once lunch is ticked (the morning dose is already
   // taken), so the bar runs to half. Wordless, so it carries no digit.
   const progress = ramp(local, [92, 104], [25, 50]);
-  return <HubFrame title="Help is on the way." sub="And Maggie sees it too — every step, from her own room." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
+  return <HubFrame title="Help is on the way." sub="And Maggie sees it too, every step of it, right from her own room." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
     {!requested && (
       <div style={{display: "grid", gap: 20, marginTop: 26}}>
         <ActionButton label="Request assistance" note="Ask a caregiver to come to your room." glyph={L_HEART_HANDSHAKE} bg={C.primary} color="#ffffff">
@@ -658,7 +658,7 @@ const HubVisitorScreen = () => {
   const rippleFade = ramp(local, [84, 92], [1, 0]);
   const brighten = clamp(local, [76, 92], [1, 1.22]);
   const answer = ramp(local, [92, 110], [0, 1]);
-  return <HubFrame title="Your voice matters." sub="Not just falls — an unexpected visitor is Maggie's call to make." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
+  return <HubFrame title="Your voice matters." sub="Not just falls. When someone she does not know turns up, it is her call." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
     {/* .visitor-card: a 5px full primary keyline, not a left border -- the kiosk
         reserves the left-border pattern for live help status. */}
     <div style={{marginTop: 30, padding: 28, background: C.surface, border: `5px solid ${C.primary}`, borderRadius: 20}}>
@@ -729,7 +729,7 @@ const FamilyScreen = () => {
       <AppName>MeridianFamily</AppName>
       <AudienceLine>For worried families</AudienceLine>
       <div style={{fontSize: 44, lineHeight: 1.08, letterSpacing: -1.5, fontWeight: 780, marginTop: 26}}>Stay informed. Stay close.</div>
-      <StoryLine>And her family watches the same story — including how it ends.</StoryLine>
+      <StoryLine>And her family sees the same story, including how it ends.</StoryLine>
     </div>
     <div style={{position: "absolute", right: 280, top: 55, opacity: contentOpacity, translate: `0 ${phoneY}px`}}><Device label="MeridianFamily daily summary and updates">
       {!onUpdates && (
@@ -784,7 +784,7 @@ const FamilyScreen = () => {
               known: someone came, and stayed. */}
           <Card style={{borderRadius: 20, padding: 22, marginTop: 12, opacity: responseCard, translate: `0 ${responseY}px`}}>
             <div style={{display: "flex", gap: 14}}>{svgGlyph(L_CHECK_CIRCLE, C.success, 29, 2.2)}<div>
-              <div style={{fontSize: 25, fontWeight: 600, lineHeight: 1.28}}>Maggie needed help in Room 101 — staff responded and stayed with her.</div>
+              <div style={{fontSize: 25, fontWeight: 600, lineHeight: 1.28}}>Maggie needed help in Room 101. Someone came, and stayed with her.</div>
               <div style={{fontSize: 20, color: C.foregroundMuted, marginTop: 7}}>Maggie is not alone.</div>
             </div></div>
           </Card>
