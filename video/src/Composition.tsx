@@ -158,10 +158,17 @@ const FallAndSkeleton = () => {
         transparent, so the strokes composite straight onto her. */}
     <AbsoluteFill style={{opacity: skeleton, mixBlendMode: "screen"}}><FullVideo src="skeleton.mp4" startFrom={CLIP_START} scale={zoom} /></AbsoluteFill>
     <AbsoluteFill style={{background: "radial-gradient(circle, transparent 44%, rgba(0,0,0,.32))"}} />
-    <div style={{position: "absolute", left: 120, bottom: 110, opacity: caption, translate: `0 ${captionY}px`, color: "white", fontSize: 56, fontWeight: 760, letterSpacing: -1.5, padding: "22px 30px", borderLeft: `5px solid ${C.mint}`, background: "rgba(5,6,10,.72)", borderRadius: "0 16px 16px 0"}}>No video ever leaves the building.</div>
-    {/* The bridge into the app beats: video stays, the alert travels. Without
-        this line a first-time viewer has no idea why phone screens follow. */}
-    <div style={{position: "absolute", left: 125, bottom: 60, opacity: bridge, color: C.mint, fontSize: 37, fontWeight: 700, letterSpacing: -0.5, padding: "6px 30px"}}>Only the alert does — here is where it goes.</div>
+    {/* Both lines live in ONE bottom-anchored stack. Previously they were two
+        independently positioned elements, which let the second drift into the
+        title-safe margin -- on 1080p that is 108px, and it was sitting at 60.
+        The stack's bottom edge is now at 150, so the whole caption clears the
+        safe area and the two lines read as one statement.
+        The bridge is what tells a first-time viewer why phone screens follow:
+        the video stays, the alert travels. */}
+    <div style={{position: "absolute", left: 120, bottom: 150, translate: `0 ${captionY}px`}}>
+      <div style={{opacity: caption, color: "white", fontSize: 56, fontWeight: 760, letterSpacing: -1.5, padding: "22px 30px", borderLeft: `5px solid ${C.mint}`, background: "rgba(5,6,10,.72)", borderRadius: "0 16px 16px 0"}}>No video ever leaves the building.</div>
+      <div style={{opacity: bridge, marginTop: 16, marginLeft: 5, color: C.mint, fontSize: 37, fontWeight: 700, letterSpacing: -0.5, padding: "0 30px"}}>Only the alert does — here is where it goes.</div>
+    </div>
   </AbsoluteFill>;
 };
 
