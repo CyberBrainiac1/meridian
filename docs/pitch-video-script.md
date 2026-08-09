@@ -181,3 +181,84 @@ Living."** Fade in 0–9, hold to 870. Nothing animates after frame 852.
 4. Grep rendered comp source for `\d` digits in copy strings; only "101"
    may appear.
 5. `python -m pytest -q` still green (nothing outside `video/` touched).
+
+---
+
+# REVISION 2 — pipeline beat + real Hub surface (still 870 frames)
+
+Two changes, both from user direction. Total stays 870 frames / 29.0s; the
+time for the new beat is recovered by trimming each app beat's trailing hold,
+never its action timings.
+
+## New cut map
+
+| Beat | Frames | Dur | Change |
+|---|---|---|---|
+| 1 Fall + skeleton | 0–155 | 155 | −10 (shorter fallen hold) |
+| **2 Pipeline (NEW)** | **155–275** | **120** | **new** |
+| 3 MeridianCare | 275–430 | 155 | −25 hold |
+| 4 MeridianHub help | 430–545 | 115 | −35 hold |
+| 5 MeridianHub visitor | 545–675 | 130 | −35 hold |
+| 6 MeridianFamily | 675–840 | 165 | −15 hold |
+| 7 End card | 840–870 | 30 | unchanged |
+
+Every beat's internal action timings are preserved; only the static hold at
+the end of each is shortened. Last action per beat: Care local 140, Hub help
+95, Hub visitor 110, Family 145 — all still complete before their new end.
+
+## Beat 2 — the pipeline (frames 155–275, 4.0s)
+
+Ported from the imported Claude Design animation (`meridian-scene.jsx`,
+`NODES`). This is the connective tissue: it explains how a fall on the floor
+becomes a phone buzzing in a caregiver's pocket, which the reel previously
+asked the viewer to infer.
+
+Dark beat (`#05060A`), continuous with Beat 1 — no dip between them; the
+skeleton dims to ~0.12 and docks as context while the diagram builds over it.
+
+Four nodes, evenly spaced, y-center 660 at 1080p, x = 220 / 700 / 1180 / 1660:
+
+| # | Label | Sub | Icon |
+|---|---|---|---|
+| 1 | CAMERA | Continuous on-site capture | camera |
+| 2 | ON-DEVICE POSE | 17-point skeleton, no cloud round-trip | cpu |
+| 3 | FALL STATE MACHINE | Normal → Candidate → Confirmed | activity |
+| 4 | ALERT DISPATCHED | Only the alert leaves the room | bell |
+
+Node styling (match the source): 96px circle, `rgba(34,255,194,.08)` fill,
+`1.5px solid rgba(34,255,194,.55)` border, 40px mint icon; label weight 800 /
+17px / letter-spacing 1.6 / mint `#22FFC2`; sub 14px `rgba(255,255,255,.5)`.
+
+Timings (beat-local, 30fps):
+
+- Nodes pop+fade in at 8, 32, 60, 90 (scale 0.8→1.06→1 over 11f, opacity 9f).
+- Connector lines wipe mint left-to-right between consecutive nodes, each
+  starting 9f after its left node lands and taking 15f. Track is
+  `rgba(255,255,255,.14)`, 2px.
+- Node 3's three state chips light in sequence at 66 / 76 / 86 — Normal,
+  Candidate, Confirmed. Unlit chip `rgba(255,255,255,.06)` /
+  `rgba(255,255,255,.4)`; lit `rgba(34,255,194,.18)` / mint.
+- Node 4's bell shakes once on arrival (±8°, ~0.4s decay).
+- Beat fades out 268–275 into MeridianCare's light surface.
+
+**Do NOT use `assets/img-pose-skeleton.png` from the archive.** It is a
+pre-rendered still. Our skeleton is real model output from `skeleton.mp4`;
+substituting a baked image would fake the one thing in this reel that is
+genuinely ours. (The archive used the still only because its browser harness
+could not decode our mp4v clip — Remotion decodes it fine.)
+
+Beat 1's bridge caption "Only the alert does — here is where it goes." now
+lands directly into node 4's "Only the alert leaves the room." Keep both;
+the echo is the point.
+
+## Beat 4 — add the real Hub reminders card
+
+`b14a18b` shipped a resident-tappable **Today's reminders** checklist. Add it
+to the Hub help beat beneath the help-status panel, using the shipped copy:
+"Take your medication" / "Time for lunch" / "Afternoon walk". One row taps
+done during the beat.
+
+**Honesty boundary — do not blur it.** A *reminder* the resident can check off
+is a prompt, not an observation. It stays banned to show a meal as **evidence**
+(the family-summary "✓ Breakfast" row) because nothing observes meals. Hub
+reminder rows are fine; a family-facing "she ate breakfast" claim is not.
