@@ -4,16 +4,19 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   AlertTriangle,
   BellRing,
+  Check,
   CheckCircle2,
   Clock,
+  Footprints,
   HeartHandshake,
   Loader2,
   PhoneCall,
   Pill,
   ShieldCheck,
+  Utensils,
   UserRoundCheck,
 } from "lucide-react";
-import { answerVisitorPrompt, createAssistanceRequest } from "@/app/actions";
+import { answerVisitorPrompt, createAssistanceRequest, reportMedicationTaken } from "@/app/actions";
 import { createClient } from "@/lib/supabase/client";
 import type {
   AssistanceKind,
@@ -30,10 +33,6 @@ const ACTION_TIMEOUT_MS = 15_000;
 // How long a finished request stays on screen so the resident actually reads
 // the outcome instead of the panel silently reverting under them.
 const TERMINAL_VISIBLE_MS = 90_000;
-// How far ahead of the scheduled time the reminder appears. Long enough that a
-// resident is not startled by a caregiver arriving unannounced, short enough
-// that the card is not standing there for hours saying nothing new.
-const MEDICATION_LEAD_MS = 30 * 60_000;
 
 type NoticeTone = "working" | "success" | "error";
 interface Notice {
@@ -93,18 +92,33 @@ function statusHeading(request: HubAssistanceRequest) {
   return "Your request was sent to the care team.";
 }
 
-/** The single dose worth mentioning: the earliest one still outstanding that is
- *  either already due (or overdue) or coming up within the lead window. Doses
- *  the care team has already given, refused, held or recorded as missed are not
- *  the resident's to think about, so they never appear. */
-function dueMedication(doses: HubMedicationDose[], now: number) {
-  // now === 0 means the clock has not been adopted yet (first paint). Rendering
-  // nothing is correct there; the effect re-runs this a tick later.
-  if (now === 0) return undefined;
-  return doses
-    .filter((dose) => dose.status === "outstanding")
-    .sort((a, b) => new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime())
-    .find((dose) => new Date(dose.scheduled_for).getTime() <= now + MEDICATION_LEAD_MS);
+/** Same local calendar day as `now` — a resident reads "today" off a wall
+ *  calendar, not a UTC boundary. */
+function isSameLocalDay(date: Date, now: number) {
+  const d = new Date(now);
+  return (
+    date.getFullYear() === d.getFullYear() &&
+    date.getMonth() === d.getMonth() &&
+    date.getDate() === d.getDate()
+  );
+}
+
+function doseKey(dose: HubMedicationDose) {
+  return `${dose.medication_id}__${dose.scheduled_for}`;
+}
+
+interface ReminderRow {
+  id: string;
+  type: "pill" | "meal" | "walk";
+  label: string;
+  time: Date;
+  done: boolean;
+  /** Only medication rows are ever backend-backed and one-directional (a
+   *  self-report can't be un-tapped). Meal/walk rows are local-only and
+   *  freely toggle, since there is nothing behind them to protect. */
+  locked: boolean;
+  busy: boolean;
+  onToggle: () => void;
 }
 
 function kindLabel(kind: AssistanceKind) {
@@ -161,6 +175,10 @@ export function HubSurface({ initialState }: { initialState: HubState }) {
   // "Call family" can never block "Emergency help".
   const [busyKind, setBusyKind] = useState<AssistanceKind | "visitor" | null>(null);
   const [now, setNow] = useState(0);
+  // Meal/walk reminders have no backend schedule to persist against (see
+  // toggleLocalReminder below) — this is purely client-side, per-session state.
+  const [localDone, setLocalDone] = useState<Set<string>>(new Set());
+  const [submittingDoseKey, setSubmittingDoseKey] = useState<string | null>(null);
   const busyRef = useRef(busyKind);
   busyRef.current = busyKind;
 
@@ -278,11 +296,110 @@ export function HubSurface({ initialState }: { initialState: HubState }) {
     await refresh();
   };
 
+  const toggleLocalReminder = (id: string) => {
+    setLocalDone((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  /** Self-report only — never a substitute for staff verification (see the
+   *  migration comment on resident_report_medication_taken). One-directional
+   *  by design: once reported, the row locks rather than offering an "undo"
+   *  that would just silently no-op against an existing row anyway. */
+  const toggleMedicationDose = async (dose: HubMedicationDose) => {
+    if (dose.status !== "outstanding" || submittingDoseKey) return;
+    const key = doseKey(dose);
+    setSubmittingDoseKey(key);
+    // Optimistic: the tap should feel instant, not wait on a round trip.
+    setState((current) => ({
+      ...current,
+      medicationDoses: current.medicationDoses.map((d) =>
+        doseKey(d) === key ? { ...d, status: "given" } : d
+      ),
+    }));
+
+    const result = await withTimeout(reportMedicationTaken(dose.medication_id, dose.scheduled_for));
+    setSubmittingDoseKey(null);
+
+    const rollback = () => {
+      setState((current) => ({
+        ...current,
+        medicationDoses: current.medicationDoses.map((d) =>
+          doseKey(d) === key ? { ...d, status: "outstanding" } : d
+        ),
+      }));
+    };
+
+    if (result === "timeout") {
+      rollback();
+      setNotice({ tone: "error", text: "That didn't save in time. Please tell a caregiver directly." });
+      return;
+    }
+    if (result.error) {
+      rollback();
+      setNotice({ tone: "error", text: result.error });
+      return;
+    }
+    await refresh();
+  };
+
   const request = activeRequest(state.assistanceRequests);
   const finished = request ? undefined : recentlyFinishedRequest(state.assistanceRequests, now);
   const prompt = state.visitorPrompts.find((item) => item.status === "pending");
   const shown = request ?? finished;
-  const medication = dueMedication(state.medicationDoses, now);
+
+  // now === 0 means the clock has not been adopted yet (first paint);
+  // rendering nothing is correct there, the effect re-runs this a tick later.
+  const doseRows: ReminderRow[] =
+    now === 0
+      ? []
+      : state.medicationDoses
+          .filter(
+            (dose) =>
+              (dose.status === "outstanding" || dose.status === "given") &&
+              isSameLocalDay(new Date(dose.scheduled_for), now)
+          )
+          .map((dose) => ({
+            id: doseKey(dose),
+            type: "pill" as const,
+            label: "Take your medication",
+            time: new Date(dose.scheduled_for),
+            done: dose.status !== "outstanding",
+            locked: dose.status !== "outstanding",
+            busy: submittingDoseKey === doseKey(dose),
+            onToggle: () => void toggleMedicationDose(dose),
+          }));
+
+  // Meals and walks have no backend schedule (there is no facility "daily
+  // activities" table) — these are fixed local placeholders, matching the
+  // Claude Design mock's own hardcoded times. Ticking them off never leaves
+  // this device.
+  const localRows: ReminderRow[] =
+    now === 0
+      ? []
+      : [
+          { id: "local-lunch", type: "meal" as const, label: "Time for lunch", hour: 12, minute: 15 },
+          { id: "local-walk", type: "walk" as const, label: "Afternoon walk", hour: 15, minute: 0 },
+        ].map((r) => {
+          const time = new Date(now);
+          time.setHours(r.hour, r.minute, 0, 0);
+          return {
+            id: r.id,
+            type: r.type,
+            label: r.label,
+            time,
+            done: localDone.has(r.id),
+            locked: false,
+            busy: false,
+            onToggle: () => toggleLocalReminder(r.id),
+          };
+        });
+
+  const reminderRows = [...doseRows, ...localRows].sort((a, b) => a.time.getTime() - b.time.getTime());
+  const nextReminderId = reminderRows.find((r) => !r.done)?.id;
 
   return (
     <main className="hub-shell">
@@ -355,7 +472,7 @@ export function HubSurface({ initialState }: { initialState: HubState }) {
         </section>
       )}
 
-      {medication && <MedicationReminder dose={medication} now={now} />}
+      <TodaysReminders rows={reminderRows} nextId={nextReminderId} />
 
       {prompt && (
         <VisitorVerification
@@ -455,30 +572,73 @@ function HelpStatus({ request }: { request: HubAssistanceRequest }) {
   );
 }
 
-/** Purely informational, and deliberately so: residents here do not
- *  self-administer, so there is no button, no confirmation and nothing to
- *  dismiss. The card says what is about to happen and then stops talking.
- *
- *  It names no drug, dose or instruction — the feed does not carry them, and
- *  this screen faces a shared room. If a resident wants that detail, a person
- *  gives it to them. */
-function MedicationReminder({ dose, now }: { dose: HubMedicationDose; now: number }) {
-  const scheduledAt = new Date(dose.scheduled_for);
-  const due = scheduledAt.getTime() <= now;
-  const time = scheduledAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+/** Tapping a medication row is a resident self-report, not a clinical
+ *  verification — it never names a drug, dose or instruction (the feed
+ *  doesn't carry them, and this screen faces a shared room), and it locks
+ *  once tapped rather than allowing an "undo" of a real record. Meal/walk
+ *  rows are ordinary local checkboxes with nothing at stake. */
+function TodaysReminders({ rows, nextId }: { rows: ReminderRow[]; nextId?: string }) {
+  if (rows.length === 0) return null;
+  const doneCount = rows.filter((row) => row.done).length;
+  const totalCount = rows.length;
+  const progress = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
 
   return (
-    <section className="hub-card medication-card" aria-live="polite">
-      <p className="eyebrow">
-        <Pill aria-hidden="true" /> Medication
-      </p>
-      <h2 className="medication-heading">
-        {due ? "It's time for your medication." : "Your medication is coming up soon."}
-      </h2>
-      <p className="medication-copy">
-        A caregiver will bring it to you. There is nothing you need to do.
-      </p>
-      <p className="medication-time">Scheduled for {time}.</p>
+    <section className="hub-card reminders-card" aria-label="Today's reminders">
+      <div className="reminders-head">
+        <h2 className="reminders-title">Today&apos;s reminders</h2>
+        <span className="reminders-count">
+          {doneCount} of {totalCount} done
+        </span>
+      </div>
+      <p className="reminders-subhead">Tap a reminder when you&apos;ve done it.</p>
+      <div
+        className="reminders-progress"
+        role="progressbar"
+        aria-valuenow={progress}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div className="reminders-progress-fill" style={{ width: `${progress}%` }} />
+      </div>
+      <ul className="reminders-list">
+        {rows.map((row) => (
+          <li key={row.id}>
+            <button
+              type="button"
+              className={`reminder-row${row.done ? " done" : ""}${row.id === nextId ? " next" : ""}`}
+              onClick={row.onToggle}
+              disabled={row.busy || (row.done && row.locked)}
+              aria-busy={row.busy}
+              aria-pressed={row.done}
+            >
+              <span className="reminder-icon" aria-hidden="true">
+                {row.busy ? (
+                  <Loader2 />
+                ) : row.type === "pill" ? (
+                  <Pill />
+                ) : row.type === "meal" ? (
+                  <Utensils />
+                ) : (
+                  <Footprints />
+                )}
+              </span>
+              <span className="reminder-body">
+                <span className="reminder-label-row">
+                  <span className="reminder-label">{row.label}</span>
+                  {row.id === nextId && <span className="reminder-tag">Up next</span>}
+                </span>
+                <span className="reminder-time">
+                  {row.time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                </span>
+              </span>
+              <span className="reminder-check" aria-hidden="true">
+                {row.done && <Check />}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
