@@ -46,6 +46,27 @@ const alertIcon = (color: string, size = 30) => (
     <path d="M12 9v4" /><path d="M12 17h.01" />
   </svg>
 );
+// Same rule as svgIcon, but for glyphs that need more than one element (the
+// pipeline's cpu and camera, the reminder icons). Stroked, never filled.
+const svgGlyph = (children: React.ReactNode, color: string, size: number, strokeWidth = 1.8) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" style={{flexShrink: 0, display: "block"}}
+       fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {children}
+  </svg>
+);
+const GLYPH_CAMERA = <><path d="M14.5 5h-5L7.5 8H4a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 20h16a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 20 8h-3.5L14.5 5Z" /><circle cx={12} cy={13.2} r={3.4} /></>;
+const GLYPH_CPU = <>
+  <rect x={7} y={7} width={10} height={10} rx={1.4} /><rect x={10} y={10} width={4} height={4} rx={0.6} />
+  {[8, 12, 16].map((p) => <React.Fragment key={p}>
+    <path d={`M${p} 7V3.6`} /><path d={`M${p} 17v3.4`} /><path d={`M7 ${p}H3.6`} /><path d={`M17 ${p}h3.4`} />
+  </React.Fragment>)}
+</>;
+const GLYPH_ACTIVITY = <path d="M3 12.5h4l2.2-7.5 4 15 2.2-7.5H21" />;
+const GLYPH_BELL = <><path d="M6.5 8.5a5.5 5.5 0 0 1 11 0c0 4.6 1.8 5.7 1.8 5.7H4.7s1.8-1.1 1.8-5.7Z" /><path d="M10.3 18.2a1.9 1.9 0 0 0 3.4 0" /></>;
+const GLYPH_PILL = <><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z" /><path d="M7 10 14 17" /></>;
+const GLYPH_MEAL = <><path d="M7 2v6a2.5 2.5 0 0 0 5 0V2" /><path d="M9.5 2v6" /><path d="M9.5 8v14" /><path d="M17 2c-2 0-3.5 2-3.5 4.5S15 11 17 11s3.5-2 3.5-4.5S19 2 17 2Z" /><path d="M17 11v11" /></>;
+const GLYPH_WALK = <><circle cx={13} cy={4.2} r={2.2} /><path d="M13 6.6v6" /><path d="M13 12.6 10 21" /><path d="M13 12.6 16.4 19.6" /><path d="M13 8.4 9.6 10.8" /><path d="M13 8.4 16.8 10.6" /></>;
+const GLYPH_CHECK = <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />;
 
 // ---------------------------------------------------------------------------
 // Cut map (870 frames @ 30fps). Sequences overlap by the length of their
@@ -55,19 +76,29 @@ const alertIcon = (color: string, size = 30) => (
 // background out and reveals the next beat, which is already opaque
 // underneath. That is what keeps every dissolve free of a flash frame.
 //
-//   Fall        0-169   (beat 0-165,   7f luminance dip 163-170)
-//   Care      165-349   (beat 165-345, 10f cross-dissolve 340-350)
-//   Hub help  340-499   (beat 345-495, in-device slide swap 490-500)
-//   Hub visit 490-664   (beat 495-660, 10f cross-dissolve 655-665)
-//   Family    655-841   (beat 660-840, 6f fade to deck navy 836-842)
+// Revision 2 inserted the 120-frame pipeline beat without moving the 870-frame
+// cap: every app beat gave up trailing HOLD only, so no action timing inside
+// any beat changed (last action per beat: Care local 140, Hub help 95, Hub
+// visitor 110, Family 145 -- all still land before their new end).
+//
+//   Fall        0-154   (beat 0-155,   no dip: the pipeline is the same dark)
+//   Pipeline  155-274   (beat 155-275, 7f fade out 268-275)
+//   Care      268-434   (beat 275-430, 10f cross-dissolve 425-435)
+//   Hub help  425-549   (beat 430-545, in-device slide swap 540-550)
+//   Hub visit 540-679   (beat 545-675, 10f cross-dissolve 670-680)
+//   Family    670-841   (beat 675-840, 6f fade to deck navy 836-842)
 //   End card  840-869
 // ---------------------------------------------------------------------------
 const T = {
-  fallEnd: 170,
-  careFrom: 165, careDur: 185,
-  hubFrom: 340, hubDur: 160, hubOffset: 5,
-  visitorFrom: 490, visitorDur: 175, visitorOffset: 5,
-  familyFrom: 655, familyDur: 187, familyOffset: 5,
+  fallEnd: 155,
+  pipeFrom: 155, pipeDur: 120,
+  // Where the reel stops being dark: the brand mark's tint flips here, at the
+  // darkest frame of the pipeline -> MeridianCare handoff.
+  darkEnd: 272,
+  careFrom: 268, careDur: 167, careOffset: 7,
+  hubFrom: 425, hubDur: 125, hubOffset: 5,
+  visitorFrom: 540, visitorDur: 140, visitorOffset: 5,
+  familyFrom: 670, familyDur: 172, familyOffset: 5,
   endFrom: 840, endDur: 30,
 };
 
@@ -78,7 +109,7 @@ const T = {
 // full size.
 const BrandMark = () => {
   const f = useCurrentFrame();
-  const onDark = f < T.fallEnd;
+  const onDark = f < T.darkEnd;
   const tint = onDark ? C.mint : C.primary;
   // Fade out just before the end card takes over, so the two marks never
   // appear at once.
@@ -106,7 +137,9 @@ const Pill = ({children, color = C.primary}: {children: React.ReactNode; color?:
 // Tap affordance: a ring that expands out of the button centre and fades as it
 // reaches full size. Without the fade the ring is still sitting on the button
 // a second later, which reads as a rendering artefact rather than a press.
-const Ripple = ({size, opacity}: {size: number; opacity: number}) => <span style={{position: "absolute", left: "50%", top: "50%", marginLeft: -size / 2, marginTop: -size / 2, width: size, height: size, borderRadius: "50%", border: "3px solid rgba(255,255,255,.7)", opacity, pointerEvents: "none"}} />;
+// color: the ring is white on the coloured buttons, but a reminder row is
+// white-on-white, so that one presses in the success green instead.
+const Ripple = ({size, opacity, color = "rgba(255,255,255,.7)"}: {size: number; opacity: number; color?: string}) => <span style={{position: "absolute", left: "50%", top: "50%", marginLeft: -size / 2, marginTop: -size / 2, width: size, height: size, borderRadius: "50%", border: `3px solid ${color}`, opacity, pointerEvents: "none"}} />;
 // The app name outranks the tagline: it is the thing the audience must retain.
 const AppName = ({children}: {children: React.ReactNode}) => <div style={{fontSize: 84, fontWeight: 880, color: C.appName, letterSpacing: -3.2, lineHeight: 1}}>{children}</div>;
 // Who this screen belongs to, as part of the header lockup itself -- a
@@ -127,9 +160,27 @@ const Device = ({children, label}: {children: React.ReactNode; label: string}) =
 
 const Background = ({children, opacity = 1}: {children: React.ReactNode; opacity?: number}) => <AbsoluteFill style={{background: `radial-gradient(circle at 18% 18%, #dff5ff 0, transparent 32%), radial-gradient(circle at 84% 82%, #d9fbef 0, transparent 30%), ${C.background}`, color: C.foreground, overflow: "hidden", opacity}}>{children}</AbsoluteFill>;
 
-const FullVideo = ({src, startFrom, scale = 1, filter}: {src: string; startFrom: number; scale?: number; filter?: string}) => <OffthreadVideo src={staticFile(src)} startFrom={startFrom} style={{width: "100%", height: "100%", objectFit: "cover", scale, filter}} />;
+const FullVideo = ({src, startFrom, scale = 1, filter, playbackRate}: {src: string; startFrom: number; scale?: number; filter?: string; playbackRate?: number}) => <OffthreadVideo src={staticFile(src)} startFrom={startFrom} playbackRate={playbackRate} style={{width: "100%", height: "100%", objectFit: "cover", scale, filter}} />;
 
-// Beat 1 -- frames 0-165, plus five frames of luminance dip into beat 2.
+// Both lines live in ONE bottom-anchored stack. Previously they were two
+// independently positioned elements, which let the second drift into the
+// title-safe margin -- on 1080p that is 108px, and it was sitting at 60. The
+// stack's bottom edge is now at 150, so the whole caption clears the safe area
+// and the two lines read as one statement.
+// The bridge is what tells a first-time viewer why the pipeline (and then the
+// phone screens) follow: the video stays, the alert travels. It is carried
+// across the 155 cut by the pipeline beat and faded there, because beats 1 and
+// 2 are one continuous dark shot.
+const DarkCaption = ({opacity, y, privacy, bridge}: {opacity: number; y: number; privacy: number; bridge: number}) => (
+  <div style={{position: "absolute", left: 120, bottom: 150, translate: `0 ${y}px`, opacity}}>
+    <div style={{opacity: privacy, color: "white", fontSize: 56, fontWeight: 760, letterSpacing: -1.5, padding: "22px 30px", borderLeft: `5px solid ${C.mint}`, background: "rgba(5,6,10,.72)", borderRadius: "0 16px 16px 0"}}>No video ever leaves the building.</div>
+    <div style={{opacity: bridge, marginTop: 16, marginLeft: 5, color: C.mint, fontSize: 37, fontWeight: 700, letterSpacing: -0.5, padding: "0 30px"}}>Only the alert does — here is where it goes.</div>
+  </div>
+);
+
+// Beat 1 -- frames 0-155. It no longer dips out: the pipeline beat that follows
+// is the same near-black surface, so the cut at 155 is invisible and the only
+// luminance handoff in the dark half of the reel is at 268-275.
 // startFrom=58 on both clips puts the impact (clip frame ~143) at beat frame
 // ~85, which leaves 30 frames of upright walking for the skeleton to lock on
 // in front of the audience.
@@ -150,34 +201,117 @@ const FallAndSkeleton = () => {
   const caption = ramp(f, [96, 120], [0, 1]);
   const captionY = clamp(f, [96, 120], [14, 0]);
   const bridge = ramp(f, [128, 148], [0, 1]);
-  // 12f fade up from black, then the 7f dip that hands over to MeridianCare.
-  const beat = ramp(f, [0, 12, 163, 170], [0, 1, 1, 0]);
+  // 12f fade up from black and no fade out: the pipeline beat picks the frame
+  // up unchanged at 155.
+  const beat = ramp(f, [0, 12], [0, 1]);
   return <AbsoluteFill style={{background: C.dark, opacity: beat}}>
     <FullVideo src="fall.mp4" startFrom={CLIP_START} scale={zoom} filter={`brightness(${videoBrightness}) saturate(.72) contrast(1.08)`} />
     {/* screen blend drops the skeleton render's black background to fully
         transparent, so the strokes composite straight onto her. */}
     <AbsoluteFill style={{opacity: skeleton, mixBlendMode: "screen"}}><FullVideo src="skeleton.mp4" startFrom={CLIP_START} scale={zoom} /></AbsoluteFill>
     <AbsoluteFill style={{background: "radial-gradient(circle, transparent 44%, rgba(0,0,0,.32))"}} />
-    {/* Both lines live in ONE bottom-anchored stack. Previously they were two
-        independently positioned elements, which let the second drift into the
-        title-safe margin -- on 1080p that is 108px, and it was sitting at 60.
-        The stack's bottom edge is now at 150, so the whole caption clears the
-        safe area and the two lines read as one statement.
-        The bridge is what tells a first-time viewer why phone screens follow:
-        the video stays, the alert travels. */}
-    <div style={{position: "absolute", left: 120, bottom: 150, translate: `0 ${captionY}px`}}>
-      <div style={{opacity: caption, color: "white", fontSize: 56, fontWeight: 760, letterSpacing: -1.5, padding: "22px 30px", borderLeft: `5px solid ${C.mint}`, background: "rgba(5,6,10,.72)", borderRadius: "0 16px 16px 0"}}>No video ever leaves the building.</div>
-      <div style={{opacity: bridge, marginTop: 16, marginLeft: 5, color: C.mint, fontSize: 37, fontWeight: 700, letterSpacing: -0.5, padding: "0 30px"}}>Only the alert does — here is where it goes.</div>
-    </div>
+    <DarkCaption opacity={1} y={captionY} privacy={caption} bridge={bridge} />
   </AbsoluteFill>;
 };
 
-// Beat 2 -- frames 165-345 (local 0-180), plus five frames of cross-dissolve.
-// This is the only beat whose background fades IN as well as out: it arrives
-// out of the luminance dip, so the light surface has to rise from black.
-const CareScreen = () => {
+// Beat 2 -- frames 155-275 (local 0-120). The connective tissue: how a person
+// on the floor becomes a phone buzzing in a caregiver's pocket, which the reel
+// previously asked the viewer to infer. Ported from the imported Claude Design
+// animation (meridian-scene.jsx, NODES) -- its node styling, labels and subs.
+//
+// Deliberately NOT ported: that file's assets/img-pose-skeleton.png. It is a
+// pre-rendered still the browser harness fell back to because it could not
+// decode our clip. Remotion decodes it fine, so the pose on screen here is the
+// real model output from skeleton.mp4, dimmed to 0.12 as context under the
+// diagram. Baking in a picture of a skeleton would fake the one thing in this
+// reel that is genuinely ours.
+const PIPE_X = [220, 700, 1180, 1660];
+const PIPE_Y = 660;
+const PIPE_NODES = [
+  {at: 8, label: "CAMERA", sub: "Continuous on-site capture", glyph: GLYPH_CAMERA},
+  // "17-point" stays numeric. The no-digits rule targets METRICS a judge would
+  // ask us to source -- latency, room counts, ARR. This is a product
+  // descriptor, it is the deck's own slide-6 wording, and "Seventeen-point"
+  // reads as an affectation.
+  {at: 32, label: "ON-DEVICE POSE", sub: "17-point skeleton, no cloud round-trip", glyph: GLYPH_CPU},
+  {at: 60, label: "FALL STATE MACHINE", sub: "", glyph: GLYPH_ACTIVITY},
+  {at: 90, label: "ALERT DISPATCHED", sub: "Only the alert leaves the room", glyph: GLYPH_BELL},
+];
+// Node 3 states the machine in words where the other nodes carry a sub line.
+const PIPE_CHIPS: [string, number][] = [["Normal", 66], ["Candidate", 76], ["Confirmed", 86]];
+const PipelineBeat = () => {
   const local = useCurrentFrame();
-  const beat = ramp(local, [0, 14, 175, 185], [0, 1, 1, 0]);
+  // The 268-275 hand-off, in two stages inside the seven frames the script
+  // allots it: the diagram clears first (268-272), then the dark plate under it
+  // fades (270-275) and reveals MeridianCare's light surface, which is rising
+  // from 271. Fading plate and diagram together instead put the nodes on top of
+  // a half-visible phone, which read as a double exposure rather than a cut.
+  const content = ramp(local, [113, 117], [1, 0]);
+  const plate = ramp(local, [115, 120], [1, 0]);
+  // Beat 1's push-in keeps running on the same clock so the pose does not jump
+  // at the cut; it clamps out at frame 165 and the layer then sits still.
+  const zoom = clamp(T.pipeFrom + local, [0, 165], [1.02, 1.1]);
+  const skeleton = ramp(local, [0, 18], [1, 0.12]);
+  const caption = ramp(local, [8, 24], [1, 0]);
+  // One shake on arrival, ~0.4s of decay. Guarded so the decay ramp's clamped
+  // left edge cannot rotate the bell before the node exists.
+  const bell = local >= 90 ? 8 * ramp(local, [90, 102], [1, 0]) * Math.sin((local - 90) * 0.9) : 0;
+  return <AbsoluteFill style={{opacity: plate}}>
+    <AbsoluteFill style={{background: C.dark}} />
+    <AbsoluteFill style={{opacity: content}}>
+    {/* startFrom lands on clip frame 213 -- beat 1's last frame plus one, and
+        inside the clip's 80 held frames. playbackRate .5 walks 120 comp frames
+        over 60 clip frames so the request never runs past the 291-frame clip
+        while staying on the held floor pose. */}
+    <AbsoluteFill style={{opacity: skeleton, mixBlendMode: "screen"}}><FullVideo src="skeleton.mp4" startFrom={CLIP_START + T.fallEnd} scale={zoom} playbackRate={0.5} /></AbsoluteFill>
+    <AbsoluteFill style={{background: "radial-gradient(circle, transparent 44%, rgba(0,0,0,.32))"}} />
+    {[0, 1, 2].map((i) => {
+      // Each connector starts 9f after its left node lands and wipes for 15f.
+      // The unlit track fades in with its left node -- drawn from frame 0 it was
+      // three grey lines popping onto the cut before any node existed.
+      const start = PIPE_NODES[i].at + 9;
+      const left = PIPE_X[i] + 56;
+      const width = PIPE_X[i + 1] - 56 - left;
+      const wipe = clamp(local, [start, start + 15], [0, 1]);
+      const track = ramp(local, [PIPE_NODES[i].at, PIPE_NODES[i].at + 9], [0, 1]);
+      return <div key={left} style={{position: "absolute", left, top: PIPE_Y - 1, width, height: 2, background: "rgba(255,255,255,.14)", opacity: track}}>
+        <div style={{height: "100%", width: `${wipe * 100}%`, background: C.mint}} />
+      </div>;
+    })}
+    {PIPE_NODES.map((node, i) => {
+      const scale = clamp(local, [node.at, node.at + 6, node.at + 11], [0.8, 1.06, 1]);
+      const opacity = ramp(local, [node.at, node.at + 9], [0, 1]);
+      return <div key={node.label} style={{position: "absolute", left: PIPE_X[i] - 125, top: PIPE_Y - 90, width: 250, textAlign: "center", opacity, scale}}>
+        <div style={{width: 96, height: 96, borderRadius: "50%", margin: "0 auto 18px", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(34,255,194,.08)", border: "1.5px solid rgba(34,255,194,.55)", rotate: `${i === 3 ? bell : 0}deg`}}>
+          {svgGlyph(node.glyph, C.mint, 40)}
+        </div>
+        <div style={{fontSize: 17, fontWeight: 800, letterSpacing: 1.6, color: C.mint}}>{node.label}</div>
+        {node.sub
+          ? <div style={{fontSize: 14, color: "rgba(255,255,255,.5)", marginTop: 8, lineHeight: 1.35}}>{node.sub}</div>
+          : <div style={{display: "flex", gap: 6, justifyContent: "center", marginTop: 12}}>{PIPE_CHIPS.map(([chip, at]) => {
+              const lit = local >= at;
+              return <span key={chip} style={{fontSize: 14, fontWeight: 700, padding: "4px 8px", borderRadius: 99, whiteSpace: "nowrap",
+                                              background: lit ? "rgba(34,255,194,.18)" : "rgba(255,255,255,.06)", color: lit ? C.mint : "rgba(255,255,255,.4)"}}>{chip}</span>;
+            })}</div>}
+      </div>;
+    })}
+    {/* Beat 1's bridge line rides across the cut and hands off to node 4's
+        "Only the alert leaves the room". The echo is the point. */}
+    <DarkCaption opacity={caption} y={0} privacy={1} bridge={1} />
+    </AbsoluteFill>
+  </AbsoluteFill>;
+};
+
+// Beat 3 -- frames 275-430 (local 0-155). Mounted seven frames early, because
+// this is the only beat whose background fades IN as well as out: it receives
+// the pipeline's 268-275 fade-out, so the light surface has to be already
+// rising underneath while the dark plate above it goes.
+const CareScreen = () => {
+  const raw = useCurrentFrame();
+  const local = raw - T.careOffset;
+  // In from 271 (the frame the pipeline's plate starts clearing) to 285; out on
+  // the 425-435 cross-dissolve into MeridianHub.
+  const beat = ramp(raw, [3, 17, 157, 167], [0, 1, 1, 0]);
   const phoneY = clamp(local, [0, 14], [24, 0]);
   const alertY = clamp(local, [8, 22], [-80, 0]);
   const alertIn = ramp(local, [8, 18], [0, 1]);
@@ -211,9 +345,12 @@ const CareScreen = () => {
   </Device></div></Background>;
 };
 
-// Shared Hub chrome. Beats 3 and 4 are the same physical device on stage, so
+// Shared Hub chrome. Beats 4 and 5 are the same physical device on stage, so
 // they share the frame and only the card inside it changes -- which is exactly
-// what the 490-500 swap has to sell.
+// what the 540-550 swap has to sell. The panel geometry is deliberately shared:
+// the help beat now carries the reminders checklist as well, so the header and
+// paddings are tighter than they were and the card starts just under the brand
+// mark, which is what buys that card its room.
 const HubFrame = ({title, sub, bgOpacity, contentOpacity, panelX, children}: {title: string; sub: string; bgOpacity: number; contentOpacity: number; panelX: number; children: React.ReactNode}) => (
   <Background opacity={bgOpacity}>
     <div style={{position: "absolute", left: 140, top: 142, width: 740, opacity: contentOpacity}}>
@@ -222,53 +359,94 @@ const HubFrame = ({title, sub, bgOpacity, contentOpacity, panelX, children}: {ti
       <div style={{fontSize: 44, fontWeight: 780, lineHeight: 1.08, letterSpacing: -1.5, marginTop: 26}}>{title}</div>
       <div style={{fontSize: 30, color: C.foregroundMuted, lineHeight: 1.38, marginTop: 28}}>{sub}</div>
     </div>
-    <div style={{position: "absolute", right: 215, top: 100, width: 770, minHeight: 850, padding: 52, borderRadius: 42, background: C.surface, boxShadow: "0 30px 80px rgba(12,74,110,.18)", opacity: contentOpacity, translate: `${panelX}px 0`}}>
+    <div style={{position: "absolute", right: 215, top: 92, width: 770, minHeight: 850, padding: 44, borderRadius: 42, background: C.surface, boxShadow: "0 30px 80px rgba(12,74,110,.18)", opacity: contentOpacity, translate: `${panelX}px 0`}}>
       <div style={{fontSize: 20, color: C.primary, fontWeight: 760, letterSpacing: 1.2}}>MERIDIANHUB</div>
-      <h1 style={{fontSize: 48, letterSpacing: -1.6, margin: "16px 0 8px"}}>Hello, Maggie</h1>
-      <p style={{fontSize: 24, lineHeight: 1.35, color: C.foregroundMuted, margin: 0}}>Choose what you need. Your care team is here to help.</p>
+      <h1 style={{fontSize: 44, letterSpacing: -1.6, margin: "12px 0 8px"}}>Hello, Maggie</h1>
+      <p style={{fontSize: 23, lineHeight: 1.3, color: C.foregroundMuted, margin: 0}}>Choose what you need. Your care team is here to help.</p>
       {children}
     </div>
   </Background>
 );
 
-// Beat 3 -- frames 345-495 (local 0-150). Mounted five frames early so the
+// Beat 4 -- frames 430-545 (local 0-115). Mounted five frames early so the
 // cross-dissolve out of MeridianCare has something to dissolve to.
 const HUB_ROWS = ["Your request was sent", "A caregiver has seen it", "A caregiver is on the way"];
+// The shipped Today's reminders checklist (b14a18b), verbatim. A reminder the
+// resident can tick is a PROMPT, not an observation, which is why it is allowed
+// here while the family-facing "she ate breakfast" row still is not: nothing in
+// the system observes a meal. The shipped card also shows a "n of n done" count
+// and a clock time per row; both are digits, so both are dropped -- the
+// progress bar carries the same information without a number.
+const HUB_REMINDERS: [string, React.ReactNode][] = [
+  ["Take your medication", GLYPH_PILL],
+  ["Time for lunch", GLYPH_MEAL],
+  ["Afternoon walk", GLYPH_WALK],
+];
 const HubHelpScreen = () => {
   const raw = useCurrentFrame();
   const local = raw - T.hubOffset;
-  const bgOpacity = ramp(raw, [150, 160], [1, 0]);
+  const bgOpacity = ramp(raw, [115, 125], [1, 0]);
   const contentOpacity = ramp(raw, [0, 10], [0, 1]);
   // The panel leaves to the left as the visitor card arrives from the right.
-  const panelX = clamp(local, [145, 155], [0, -40]);
+  const panelX = clamp(local, [110, 120], [0, -40]);
   const panelScale = clamp(local, [10, 26], [0.97, 1]);
   const panelIn = ramp(local, [10, 26], [0, 1]);
+  const remindersIn = ramp(local, [38, 50], [0, 1]);
+  const remindersY = clamp(local, [38, 50], [14, 0]);
+  // Maggie ticks the first reminder off herself: ripple 64-78, the row commits
+  // at 74, the progress bar catches up by 86 -- all before the emergency pill's
+  // 80-95 fade, which is the beat's last action.
+  // Row-wide flash rather than an expanding ring: the row is short and clips
+  // a circle into a lens. Ramps up fast, decays through the commit at 74.
+  const tapFlash = ramp(local, [64, 70, 82], [0, 1, 0]);
+  const ticked = local >= 74;
+  const progress = ramp(local, [74, 86], [0, 100 / 3]);
   const emergency = ramp(local, [80, 95], [0, 1]);
   return <HubFrame title="Help is on the way." sub="And Maggie sees it too — every step, from her own room." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
-    <Panel style={{padding: 30, marginTop: 32, border: "2px solid #b6efd8", background: "#f3fdf8", opacity: panelIn, scale: panelScale}}>
+    <Panel style={{padding: 26, marginTop: 18, border: "2px solid #b6efd8", background: "#f3fdf8", opacity: panelIn, scale: panelScale}}>
       <div style={{display: "flex", alignItems: "center", gap: 9, fontWeight: 800, color: C.success, fontSize: 20, letterSpacing: 1}}>{svgIcon(PATH_STATUS, C.success, 22)}<span>HELP STATUS</span></div>
-      <h2 style={{fontSize: 34, lineHeight: 1.15, margin: "14px 0 22px"}}>Help is coming. A caregiver is on the way.</h2>
+      <h2 style={{fontSize: 31, lineHeight: 1.15, margin: "12px 0 16px"}}>Help is coming. A caregiver is on the way.</h2>
       {HUB_ROWS.map((row, i) => {
         // Rows stagger 14f apart: the dot pops, then its label catches up.
         const start = 26 + i * 14;
         const dot = clamp(local, [start, start + 6, start + 12], [0, 1.15, 1]);
         const label = ramp(local, [start + 4, start + 14], [0, 1]);
-        return <div key={row} style={{display: "flex", alignItems: "center", gap: 15, marginTop: 15, fontSize: 23, color: C.foreground}}>
+        return <div key={row} style={{display: "flex", alignItems: "center", gap: 15, marginTop: 12, fontSize: 22, color: C.foreground}}>
           <span style={{width: 18, height: 18, borderRadius: "50%", background: C.success, flexShrink: 0, scale: dot}} />
           <span style={{opacity: label}}>{row}</span>
         </div>;
       })}
     </Panel>
-    <div style={{marginTop: 26, borderRadius: 20, background: "#ffe9e5", padding: 22, fontSize: 25, fontWeight: 760, color: C.destructive, display: "flex", alignItems: "center", gap: 11, opacity: emergency}}>{alertIcon(C.destructive, 27)}<span>Emergency help</span></div>
+    <Panel style={{padding: 18, marginTop: 14, opacity: remindersIn, translate: `0 ${remindersY}px`}}>
+      <div style={{fontSize: 26, fontWeight: 800, letterSpacing: -0.6}}>Today&rsquo;s reminders</div>
+      <div style={{fontSize: 19, color: C.foregroundMuted, marginTop: 5}}>Tap a reminder when you&rsquo;ve done it.</div>
+      <div style={{marginTop: 11, height: 10, borderRadius: 99, background: C.background, border: `2px solid ${C.border}`, overflow: "hidden"}}>
+        <div style={{height: "100%", borderRadius: 99, background: C.success, width: `${progress}%`}} />
+      </div>
+      {HUB_REMINDERS.map(([label, glyph], i) => {
+        const start = 42 + i * 5;
+        const rowIn = ramp(local, [start, start + 9], [0, 1]);
+        const done = i === 0 && ticked;
+        return <div key={label} style={{display: "flex", alignItems: "center", gap: 13, marginTop: i === 0 ? 13 : 9, padding: "7px 12px", borderRadius: 15,
+                                       border: `2px solid ${done ? "#b6efd8" : C.border}`, background: done ? "#f3fdf8" : C.surface,
+                                       opacity: rowIn, position: "relative", overflow: "hidden"}}>
+          <span style={{width: 40, height: 40, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: done ? C.success : C.muted}}>{svgGlyph(glyph, done ? "#ffffff" : C.primary, 24, 2)}</span>
+          <span style={{flex: 1, fontSize: 21, fontWeight: 740, color: done ? C.foregroundMuted : C.foreground, textDecoration: done ? "line-through" : "none"}}>{label}</span>
+          <span style={{width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${done ? C.success : C.border}`, background: done ? C.success : "transparent"}}>{done && svgGlyph(GLYPH_CHECK, "#ffffff", 16, 3)}</span>
+          {i === 0 && <div style={{position: "absolute", inset: 0, background: C.success, opacity: tapFlash * 0.16, pointerEvents: "none"}} />}
+        </div>;
+      })}
+    </Panel>
+    <div style={{marginTop: 14, borderRadius: 20, background: "#ffe9e5", padding: 18, fontSize: 24, fontWeight: 760, color: C.destructive, display: "flex", alignItems: "center", gap: 11, opacity: emergency}}>{alertIcon(C.destructive, 27)}<span>Emergency help</span></div>
   </HubFrame>;
 };
 
-// Beat 4 -- frames 495-660 (local 0-165). Mounted at 490 underneath beat 3 so
+// Beat 5 -- frames 545-675 (local 0-130). Mounted at 540 underneath beat 4 so
 // the in-device swap is a real slide, not a cut.
 const HubVisitorScreen = () => {
   const raw = useCurrentFrame();
   const local = raw - T.visitorOffset;
-  const bgOpacity = ramp(raw, [165, 175], [1, 0]);
+  const bgOpacity = ramp(raw, [130, 140], [1, 0]);
   const contentOpacity = ramp(raw, [0, 10], [0, 1]);
   const panelX = clamp(raw, [0, 10], [40, 0]);
   const buttonY = clamp(local, [20, 34], [12, 0]);
@@ -291,7 +469,7 @@ const HubVisitorScreen = () => {
   </HubFrame>;
 };
 
-// Beat 5 -- frames 660-840 (local 0-180). Carries the 6f fade to deck navy
+// Beat 6 -- frames 675-840 (local 0-165). Carries the 6f fade to deck navy
 // that hands the last thirty frames to the end card.
 const FamilyScreen = () => {
   const raw = useCurrentFrame();
@@ -306,7 +484,7 @@ const FamilyScreen = () => {
   // Resolution stated in colour, not in a new line of copy: the amber ring on
   // the original alert cools to the green of the response.
   const resolved = interpolateColors(ramp(local, [120, 145], [0, 1]), [0, 1], [C.warning, C.success]);
-  const toNavy = ramp(raw, [181, 187], [0, 1]);
+  const toNavy = ramp(raw, [166, 172], [0, 1]);
   return <Background>
     <div style={{position: "absolute", left: 200, top: 158, width: 790, opacity: contentOpacity}}>
       <AppName>MeridianFamily</AppName>
@@ -371,7 +549,8 @@ const musicVolume = (f: number) =>
 
 export const MeridianDemo = () => <AbsoluteFill style={{background: C.dark}}>
   <Audio src={staticFile("music.mp3")} volume={musicVolume} />
-  <Sequence durationInFrames={T.fallEnd} style={{zIndex: 6}}><FallAndSkeleton /></Sequence>
+  <Sequence durationInFrames={T.fallEnd} style={{zIndex: 7}}><FallAndSkeleton /></Sequence>
+  <Sequence from={T.pipeFrom} durationInFrames={T.pipeDur} style={{zIndex: 6}}><PipelineBeat /></Sequence>
   <Sequence from={T.careFrom} durationInFrames={T.careDur} style={{zIndex: 5}}><CareScreen /></Sequence>
   <Sequence from={T.hubFrom} durationInFrames={T.hubDur} style={{zIndex: 4}}><HubHelpScreen /></Sequence>
   <Sequence from={T.visitorFrom} durationInFrames={T.visitorDur} style={{zIndex: 3}}><HubVisitorScreen /></Sequence>
