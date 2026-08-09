@@ -86,11 +86,14 @@ const BrandMark = () => {
   return (
     <div style={{position: "absolute", top: 46, right: 56, zIndex: 20, opacity,
                  display: "flex", alignItems: "center", gap: 12, pointerEvents: "none"}}>
+      {/* Same mark as the end card and the deck title slide: M-notched shield
+          with the medical cross. NOT the MeridianHub app icon (house glyph) --
+          that is a product icon, not the brand. */}
       <svg width={34} height={34} viewBox="0 0 1024 1024" aria-label="Meridian" style={{display: "block",
            filter: onDark ? "drop-shadow(0 2px 6px rgba(0,0,0,.65))" : "none"}}>
-        <path d="M512 168 L800 268 L800 536 C800 700 676 812 512 872 C348 812 224 700 224 536 L224 268 Z"
-              fill="none" stroke={tint} strokeWidth={62} strokeLinejoin="round" />
-        <path d="M512 356 L676 490 L676 660 L560 660 L560 566 L464 566 L464 660 L348 660 L348 490 Z" fill={tint} />
+        <path d="M242 250 L420 196 L512 320 L604 196 L782 250 L782 540 C782 694 668 800 512 858 C356 800 242 694 242 540 Z"
+              fill="none" stroke={tint} strokeWidth={62} strokeLinejoin="round" strokeLinecap="round" />
+        <path d="M462 400 H562 V470 H632 V570 H562 V640 H462 V570 H392 V470 H462 Z" fill={tint} />
       </svg>
       <span style={{fontSize: 23, fontWeight: 800, letterSpacing: 3, color: tint,
                     textShadow: onDark ? "0 2px 6px rgba(0,0,0,.6)" : "none"}}>MERIDIAN</span>
