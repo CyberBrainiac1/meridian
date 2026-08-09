@@ -1,0 +1,21 @@
+/* Pitch-deck / marketing-only tokens, extracted from uploads/Meridian AI Pitch Deck (A).pdf.
+   NOT the product's UI tokens -- see colors.css/typography.css/spacing.css for the
+   canonical palette+type+radii mirrored from the repo's meridian_software/design-tokens/tokens.json.
+   Use --deck-* only when recreating the pitch deck / marketing collateral itself. */
+:root{
+  --deck-ink:#541301;
+  --deck-accent:#6d9eeb;
+  --deck-logo-blue:#64b7e3;
+  --deck-bg:#f2f0ef;
+  --deck-black:#000000;
+  --deck-salmon:#f4bbad;
+  --deck-lavender:#d5d7ff;
+  --deck-mint:#d6ffd7;
+  --deck-ink-soft:rgba(84,19,1,.78);
+  --deck-ink-faint:rgba(84,19,1,.55);
+  --deck-line:rgba(84,19,1,.28);
+  --deck-line-strong:rgba(84,19,1,.6);
+  --font-deck-display:'Raleway',sans-serif;
+  --font-deck-core:'Instrument Sans',sans-serif;
+  --font-deck-alt:'Geist',sans-serif;
+}

@@ -1,0 +1,17 @@
+:root{
+  --font-heading:'Figtree',system-ui,sans-serif;
+  --font-body:'Noto Sans',system-ui,sans-serif;
+  --font-mono-data:'Fira Code',ui-monospace,monospace;
+  --text-display:32px;
+  --text-title:24px;
+  --text-heading:20px;
+  --text-body:16px;
+  --text-caption:14px;
+  --text-mono:14px;
+  --leading-tight:1.15;
+  --leading-body:1.5;
+  --weight-body:400;
+  --weight-medium:500;
+  --weight-semibold:600;
+  --weight-bold:700;
+}

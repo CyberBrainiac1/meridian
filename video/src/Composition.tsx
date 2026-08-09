@@ -16,6 +16,17 @@ const C = {
   destructive: "#991B1B", foreground: "#0C4A6E", muted: "#E7EFF5", border: "#E0F2FE",
   background: "#F0F9FF", surface: "#FFFFFF", foregroundMuted: "#2F5D77", dark: "#05060A", mint: "#22FFC2",
   deckNavy: "#0B111B", appName: "#08131B",
+  // Severity BASE tokens, distinct from the *Strong text variants above. The
+  // design system's Badge tints its pill with the base colour at 1f alpha and
+  // draws the label in the Strong variant -- that pairing is the accessibility
+  // audit baked into tokens/colors.css, so both halves are needed to port it.
+  destructiveBase: "#DC2626", warningBase: "#B45309", successBase: "#059669",
+  // The kiosk/mobile page surface (--color-background-mobile). Cards are white
+  // ON this, which is why the Hub panel is no longer white-on-white.
+  backgroundMobile: "#ECFEFF",
+  // --border-soft. --color-border (#E0F2FE) is nearly invisible as a 2-3px
+  // stroke on a #F0F9FF field, and the reminders card leans on its row strokes.
+  borderStrong: "#7DD3FC",
 };
 const ease = Easing.bezier(0.16, 1, 0.3, 1);
 const clamp = (value: number, input: number[], output: number[]) => interpolate(value, input, output, {extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease});
@@ -30,24 +41,14 @@ const ramp = (value: number, input: number[], output: number[]) => interpolate(v
 // Chromium with whatever fonts the machine happens to have, and glyphs like
 // U+2301 fell back to a bare "~" on this box while U+2659 rendered as a chess
 // pawn. Paths always draw.
-const svgIcon = (d: string, color: string, size = 30, filled = true) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" style={{flexShrink: 0, display: "block"}}
-       fill={filled ? color : "none"} stroke={filled ? "none" : color} strokeWidth={filled ? 0 : 2.2}
-       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d={d} />
-  </svg>
-);
-const PATH_STATUS = "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm4.7 7.7-5.6 5.6a1 1 0 0 1-1.4 0l-2.4-2.4a1 1 0 1 1 1.4-1.4l1.7 1.7 4.9-4.9a1 1 0 0 1 1.4 1.4Z";
-const PATH_VISITOR = "M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5Z";
-const alertIcon = (color: string, size = 30) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" style={{flexShrink: 0, display: "block"}}
-       fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M10.3 3.2 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.2a2 2 0 0 0-3.4 0Z" />
-    <path d="M12 9v4" /><path d="M12 17h.01" />
-  </svg>
-);
-// Same rule as svgIcon, but for glyphs that need more than one element (the
-// pipeline's cpu and camera, the reminder icons). Stroked, never filled.
+//
+// Every app-screen glyph below is the real Lucide path, copied out of
+// lucide-react, because Lucide is what the design system mandates on web and
+// what hub-surface.tsx / the Hub + Care + Family kits actually import. The
+// mockups' own Unicode stand-ins are deliberately NOT ported: the Family kit
+// draws its daily-summary icon as U+2600 and its visitor rows as U+1F6AA /
+// U+1F6B6, which are exactly the emoji the design system's "no emoji as icons
+// anywhere" rule bans and exactly the class of glyph that broke once here.
 const svgGlyph = (children: React.ReactNode, color: string, size: number, strokeWidth = 1.8) => (
   <svg width={size} height={size} viewBox="0 0 24 24" style={{flexShrink: 0, display: "block"}}
        fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -63,10 +64,33 @@ const GLYPH_CPU = <>
 </>;
 const GLYPH_ACTIVITY = <path d="M3 12.5h4l2.2-7.5 4 15 2.2-7.5H21" />;
 const GLYPH_BELL = <><path d="M6.5 8.5a5.5 5.5 0 0 1 11 0c0 4.6 1.8 5.7 1.8 5.7H4.7s1.8-1.1 1.8-5.7Z" /><path d="M10.3 18.2a1.9 1.9 0 0 0 3.4 0" /></>;
-const GLYPH_PILL = <><path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z" /><path d="M7 10 14 17" /></>;
-const GLYPH_MEAL = <><path d="M7 2v6a2.5 2.5 0 0 0 5 0V2" /><path d="M9.5 2v6" /><path d="M9.5 8v14" /><path d="M17 2c-2 0-3.5 2-3.5 4.5S15 11 17 11s3.5-2 3.5-4.5S19 2 17 2Z" /><path d="M17 11v11" /></>;
-const GLYPH_WALK = <><circle cx={13} cy={4.2} r={2.2} /><path d="M13 6.6v6" /><path d="M13 12.6 10 21" /><path d="M13 12.6 16.4 19.6" /><path d="M13 8.4 9.6 10.8" /><path d="M13 8.4 16.8 10.6" /></>;
-const GLYPH_CHECK = <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />;
+
+// --- Lucide, verbatim ------------------------------------------------------
+// hub-surface.tsx imports: HeartHandshake, PhoneCall, BellRing, ShieldCheck,
+// UserRoundCheck, CheckCircle2 (lucide's circle-check-big), AlertTriangle
+// (triangle-alert), Clock, Pill, Utensils, Footprints, Check. The Care and
+// Family tab bars use the nav set (bell-ring / clipboard-list / users /
+// settings and sun / door-open / bell / lock-keyhole).
+const L_HEART_HANDSHAKE = <path d="M19.414 14.414C21 12.828 22 11.5 22 9.5a5.5 5.5 0 0 0-9.591-3.676.6.6 0 0 1-.818.001A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.535 5.362a2 2 0 0 0 2.879.052 2.12 2.12 0 0 0-.004-3 2.124 2.124 0 1 0 3-3 2.124 2.124 0 0 0 3.004 0 2 2 0 0 0 0-2.828l-1.881-1.882a2.41 2.41 0 0 0-3.409 0l-1.71 1.71a2 2 0 0 1-2.828 0 2 2 0 0 1 0-2.828l2.823-2.762" />;
+const L_PHONE_CALL = <><path d="M13 2a9 9 0 0 1 9 9" /><path d="M13 6a5 5 0 0 1 5 5" /><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" /></>;
+const L_BELL_RING = <><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M22 8c0-2.3-.8-4.3-2-6" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /><path d="M4 2C2.8 3.7 2 5.7 2 8" /></>;
+const L_BELL = <><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></>;
+const L_SHIELD_CHECK = <><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></>;
+const L_USER_ROUND_CHECK = <><path d="M2 21a8 8 0 0 1 13.292-6" /><circle cx="10" cy="8" r="5" /><path d="m16 19 2 2 4-4" /></>;
+const L_CHECK_CIRCLE = <><path d="M21.801 10A10 10 0 1 1 17 3.335" /><path d="m9 11 3 3L22 4" /></>;
+const L_TRIANGLE_ALERT = <><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></>;
+const L_CLOCK = <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>;
+const L_PILL = <><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" /><path d="m8.5 8.5 7 7" /></>;
+const L_UTENSILS = <><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" /><path d="M7 2v20" /><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" /></>;
+const L_FOOTPRINTS = <><path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z" /><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z" /><path d="M16 17h4" /><path d="M4 13h4" /></>;
+const L_CHECK = <path d="M20 6 9 17l-5-5" />;
+const L_CLIPBOARD_LIST = <><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" /></>;
+const L_USERS = <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><path d="M16 3.128a4 4 0 0 1 0 7.744" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><circle cx="9" cy="7" r="4" /></>;
+const L_SETTINGS = <><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /><circle cx="12" cy="12" r="3" /></>;
+const L_SUN = <><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></>;
+const L_DOOR_OPEN = <><path d="M11 20H2" /><path d="M11 4.562v16.157a1 1 0 0 0 1.242.97L19 20V5.562a2 2 0 0 0-1.515-1.94l-4-1A2 2 0 0 0 11 4.561z" /><path d="M11 4H8a2 2 0 0 0-2 2v14" /><path d="M14 12h.01" /><path d="M22 20h-3" /></>;
+const L_LOCK = <><circle cx="12" cy="16" r="1" /><rect x="3" y="10" width="18" height="12" rx="2" /><path d="M7 10V7a5 5 0 0 1 10 0v3" /></>;
+const L_ACTIVITY = <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" />;
 
 // ---------------------------------------------------------------------------
 // Cut map (870 frames @ 30fps). Sequences overlap by the length of their
@@ -132,14 +156,69 @@ const BrandMark = () => {
   );
 };
 
-const Panel = ({children, style}: {children: React.ReactNode; style?: React.CSSProperties}) => <div style={{background: C.surface, border: `1px solid ${C.border}`, borderRadius: 26, boxShadow: "0 18px 45px rgba(12,74,110,.11)", ...style}}>{children}</div>;
-const Pill = ({children, color = C.primary}: {children: React.ReactNode; color?: string}) => <span style={{background: `${color}18`, color, borderRadius: 99, padding: "10px 16px", fontWeight: 750, fontSize: 20}}>{children}</span>;
+// components/display/Card.jsx, variant "card": white surface, 1px border,
+// --shadow-soft (a soft double shadow, never a hard drop shadow). Radius is
+// passed per surface because the design system varies it deliberately -- Care
+// 12 (tighter, clinical), Family 20 (warmer), web 16.
+const SHADOW_SOFT = "0 1px 2px rgba(12,74,110,.04), 0 8px 24px rgba(12,74,110,.08)";
+const Card = ({children, style}: {children: React.ReactNode; style?: React.CSSProperties}) => <div style={{background: C.surface, border: `1px solid ${C.border}`, borderRadius: 20, boxShadow: SHADOW_SOFT, ...style}}>{children}</div>;
+// components/display/Badge.jsx. TONES pairs a base-colour tint at 1f alpha
+// with the *Strong* text variant; LABELS are the fixed severity strings the
+// design system forbids inventing synonyms for.
+const BADGE = {
+  critical: {tint: C.destructiveBase, text: C.destructive, label: "Emergency"},
+  warning: {tint: C.warningBase, text: C.warning, label: "Needs attention"},
+  success: {tint: C.successBase, text: C.success, label: "Resolved"},
+  info: {tint: C.primary, text: C.primary, label: "Info"},
+};
+const Badge = ({tone, children, size = 22}: {tone: keyof typeof BADGE; children?: React.ReactNode; size?: number}) => {
+  const t = BADGE[tone];
+  return <span style={{display: "inline-flex", alignItems: "center", gap: 6, fontSize: size, fontWeight: 600,
+                       padding: "7px 15px", borderRadius: 999, background: `${t.tint}1f`, color: t.text, whiteSpace: "nowrap"}}>{children ?? t.label}</span>;
+};
+// The iOS tab bar shared by the Care and Family kits: absolute, flush bottom,
+// 1px top border, white, flex-1 items, minHeight 44 for the touch target.
+// `badge` draws Care's unread dot on Alerts -- a plain dot, never a count,
+// because a count would put a digit on screen.
+type Tab = {key: string; label: string; glyph: React.ReactNode; badge?: boolean};
+const TabBar = ({tabs, active, activeColor}: {tabs: Tab[]; active: string; activeColor?: (key: string) => string}) => (
+  <div style={{position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", background: C.surface,
+               borderTop: `1px solid ${C.border}`, paddingBottom: 14, zIndex: 3}}>
+    {tabs.map((t) => {
+      const color = activeColor ? activeColor(t.key) : (t.key === active ? C.primary : C.foregroundMuted);
+      return <div key={t.key} style={{flex: 1, minHeight: 44, padding: "13px 0 4px", display: "flex", flexDirection: "column",
+                                     alignItems: "center", gap: 7, color, fontSize: 17, fontWeight: 600}}>
+        <span style={{position: "relative", display: "block"}}>
+          {svgGlyph(t.glyph, color, 27, 2)}
+          {t.badge && <span style={{position: "absolute", top: -3, right: -6, width: 13, height: 13, borderRadius: "50%",
+                                    background: C.destructiveBase, border: `2px solid ${C.surface}`}} />}
+        </span>
+        <span>{t.label}</span>
+      </div>;
+    })}
+  </div>
+);
+// The kiosk's primary action button: 128px min-height, 18px radius, label row
+// with a 44px glyph, then the .action-note sub-line. Scaled to the panel.
+const ActionButton = ({label, note, glyph, bg, color, border, style, children}: {label: string; note: string; glyph: React.ReactNode; bg: string; color: string; border?: string; style?: React.CSSProperties; children?: React.ReactNode}) => (
+  <div style={{minHeight: 104, borderRadius: 18, padding: 22, background: bg, color, border: border ?? "none",
+               display: "flex", flexDirection: "column", gap: 8, justifyContent: "center", position: "relative", overflow: "hidden", ...style}}>
+    <span style={{display: "flex", alignItems: "center", gap: 16, fontSize: 30, fontWeight: 800, letterSpacing: -0.6}}>
+      {svgGlyph(glyph, color, 38, 2.25)}{label}
+    </span>
+    <span style={{fontSize: 20, fontWeight: 600, lineHeight: 1.3, color: color === "#ffffff" ? "rgba(255,255,255,.92)" : C.foregroundMuted}}>{note}</span>
+    {children}
+  </div>
+);
 // Tap affordance: a ring that expands out of the button centre and fades as it
 // reaches full size. Without the fade the ring is still sitting on the button
 // a second later, which reads as a rendering artefact rather than a press.
 // color: the ring is white on the coloured buttons, but a reminder row is
 // white-on-white, so that one presses in the success green instead.
-const Ripple = ({size, opacity, color = "rgba(255,255,255,.7)"}: {size: number; opacity: number; color?: string}) => <span style={{position: "absolute", left: "50%", top: "50%", marginLeft: -size / 2, marginTop: -size / 2, width: size, height: size, borderRadius: "50%", border: `3px solid ${color}`, opacity, pointerEvents: "none"}} />;
+// Bails out at size 0 rather than rendering: a zero-width circle still paints
+// its 3px border, which left a stray 6px dot sitting on every button that had
+// not been pressed yet.
+const Ripple = ({size, opacity, color = "rgba(255,255,255,.7)"}: {size: number; opacity: number; color?: string}) => size <= 0 ? null : <span style={{position: "absolute", left: "50%", top: "50%", marginLeft: -size / 2, marginTop: -size / 2, width: size, height: size, borderRadius: "50%", border: `3px solid ${color}`, opacity, pointerEvents: "none"}} />;
 // The app name outranks the tagline: it is the thing the audience must retain.
 const AppName = ({children}: {children: React.ReactNode}) => <div style={{fontSize: 84, fontWeight: 880, color: C.appName, letterSpacing: -3.2, lineHeight: 1}}>{children}</div>;
 // Who this screen belongs to, as part of the header lockup itself -- a
@@ -306,6 +385,29 @@ const PipelineBeat = () => {
 // this is the only beat whose background fades IN as well as out: it receives
 // the pipeline's 268-275 fade-out, so the light surface has to be already
 // rising underneath while the dark plate above it goes.
+// The Care kit's tab bar. The bundled kit ships three tabs; the mockup adds
+// Settings and the unread marker on Alerts, so this is the four-tab bar.
+const CARE_TABS: Tab[] = [
+  {key: "alerts", label: "Alerts", glyph: L_BELL_RING, badge: true},
+  {key: "handoff", label: "Handoff", glyph: L_CLIPBOARD_LIST},
+  {key: "residents", label: "Residents", glyph: L_USERS},
+  {key: "settings", label: "Settings", glyph: L_SETTINGS},
+];
+// IncidentRow from the Care kit: a Badge and a relative time on one row, then
+// the resident-first summary at 17/500, then the status label -- separated by a
+// 1px rule, not boxed in a card. The kit's own times ("2m ago", "14m ago") are
+// digits, so they carry the same information in words.
+const IncidentRow = ({tone, when, copy, status, statusColor, children, style}: {tone: keyof typeof BADGE; when: string; copy: string; status: string; statusColor?: string; children?: React.ReactNode; style?: React.CSSProperties}) => (
+  <div style={{padding: "20px 4px", borderBottom: `1px solid ${C.border}`, ...style}}>
+    <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 11}}>
+      <Badge tone={tone} />
+      <span style={{fontSize: 21, color: C.foregroundMuted}}>{when}</span>
+    </div>
+    <div style={{fontWeight: 500, fontSize: 29, lineHeight: 1.24}}>{copy}</div>
+    <div style={{fontSize: 21, color: statusColor ?? C.foregroundMuted, fontWeight: statusColor ? 700 : 400, marginTop: 5}}>{status}</div>
+    {children}
+  </div>
+);
 const CareScreen = () => {
   const raw = useCurrentFrame();
   const local = raw - T.careOffset;
@@ -313,35 +415,77 @@ const CareScreen = () => {
   // the 425-435 cross-dissolve into MeridianHub.
   const beat = ramp(raw, [3, 17, 157, 167], [0, 1, 1, 0]);
   const phoneY = clamp(local, [0, 14], [24, 0]);
-  const alertY = clamp(local, [8, 22], [-80, 0]);
-  const alertIn = ramp(local, [8, 18], [0, 1]);
-  const ackRipple = clamp(local, [55, 72], [0, 92]);
-  const ackRippleFade = ramp(local, [64, 72], [1, 0]);
-  const respRipple = clamp(local, [96, 112], [0, 92]);
-  const respRippleFade = ramp(local, [104, 112], [1, 0]);
-  const acknowledged = local >= 72;
-  const responding = local >= 112;
-  const screenY = clamp(local, [118, 140], [0, -145]);
-  const responsePanel = ramp(local, [118, 140], [0, 1]);
+  const listIn = ramp(local, [0, 14], [0, 1]);
+  // The urgent-alert modal is how a critical alert actually reaches a phone:
+  // full screen, before the list. One arrival pop (0.92 -> 1.02 -> 1) per the
+  // motion guideline's "exactly one scale/pop-in, then hold steady", never a
+  // repeating pulse.
+  const modalIn = ramp(local, [8, 20], [0, 1]);
+  const modalScale = clamp(local, [8, 16, 22], [0.92, 1.02, 1]);
+  const ackRipple = clamp(local, [46, 60], [0, 300]);
+  const ackRippleFade = ramp(local, [50, 60], [1, 0]);
+  const modalOut = ramp(local, [58, 70], [1, 0]);
+  const modalY = clamp(local, [58, 70], [0, 60]);
+  // Actions shifted inside the beat (allowed) to buy the modal its screen time.
+  // Last action now finishes at local 136, well before the beat's 155.
+  const acknowledged = local >= 62;
+  const respRipple = clamp(local, [92, 108], [0, 300]);
+  const respRippleFade = ramp(local, [100, 108], [1, 0]);
+  const responding = local >= 108;
+  const responsePanel = ramp(local, [114, 136], [0, 1]);
+  const responseY = clamp(local, [114, 136], [22, 0]);
   return <Background opacity={beat}><div style={{position: "absolute", left: 205, top: 150, width: 790}}>
     <AppName>MeridianCare</AppName>
     <AudienceLine>For night-shift caregivers</AudienceLine>
     <div style={{fontSize: 44, letterSpacing: -1.5, fontWeight: 780, marginTop: 26}}>Care, in sync.</div>
     <StoryLine>The instant Maggie falls, her care team knows.</StoryLine>
   </div><div style={{position: "absolute", right: 270, top: 55, translate: `0 ${phoneY}px`}}><Device label="MeridianCare caregiver alerts">
-    <div style={{padding: "72px 28px 102px", height: "100%", translate: `0 ${screenY}px`}}>
-      <h1 style={{fontSize: 42, margin: "4px 0 25px", letterSpacing: -1.2}}>Alerts</h1>
-      <div style={{position: "relative", translate: `0 ${alertY}px`, opacity: alertIn}}>
-        <Panel style={{padding: 22, borderLeft: `7px solid ${C.destructive}`}}><div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}><Pill color={C.destructive}>Emergency</Pill>{alertIcon(C.destructive, 26)}</div>
-          <div style={{fontSize: 30, lineHeight: 1.22, fontWeight: 760, marginTop: 18}}>Maggie may need help in Room 101.</div>
-          <div style={{fontSize: 22, marginTop: 12, color: C.foregroundMuted}}>Fall detected</div>
-          {!acknowledged && <button style={{marginTop: 22, border: 0, width: "100%", padding: "17px", borderRadius: 17, color: "white", fontWeight: 800, fontSize: 24, background: C.primary, position: "relative", overflow: "hidden"}}>Acknowledge<Ripple size={ackRipple} opacity={ackRippleFade} /></button>}
-          {acknowledged && <div style={{marginTop: 22}}><Pill color={responding ? C.success : C.warning}>{responding ? "Responding" : "Acknowledged"}</Pill>{!responding && <button style={{marginTop: 18, border: 0, width: "100%", padding: "17px", borderRadius: 17, color: "white", fontWeight: 800, fontSize: 24, background: C.primary, position: "relative", overflow: "hidden"}}>Mark responding<Ripple size={respRipple} opacity={respRippleFade} /></button>}</div>}
-        </Panel>
-      </div>
-      {responding && <Panel style={{padding: 22, marginTop: 20, opacity: responsePanel}}><div style={{fontSize: 21, fontWeight: 750, color: C.foregroundMuted}}>RESPONSE</div><div style={{fontSize: 28, fontWeight: 740, marginTop: 8}}>Care team is responding.</div></Panel>}
+    <div style={{padding: "70px 24px 0", height: "100%", opacity: listIn}}>
+      <h1 style={{fontFamily: "inherit", fontWeight: 600, fontSize: 40, letterSpacing: -1.1, margin: "6px 0 16px"}}>Alerts</h1>
+      <IncidentRow tone="critical" when="Just now" copy="Maggie may need help in Room 101."
+                   status={responding ? "Responding" : acknowledged ? "Acknowledged" : "Open"}
+                   statusColor={responding ? C.success : acknowledged ? C.warning : undefined}>
+        {acknowledged && !responding && (
+          // NEXT_ACTIONS.Acknowledged leads with "Mark responding". The kit puts
+          // that button on the incident-detail screen; the beat has no room for a
+          // push transition, so it sits on the row it belongs to.
+          <div style={{marginTop: 16, padding: "16px", borderRadius: 10, background: C.primary, color: "white",
+                       fontWeight: 700, fontSize: 24, textAlign: "center", position: "relative", overflow: "hidden"}}>
+            Mark responding<Ripple size={respRipple} opacity={respRippleFade} />
+          </div>
+        )}
+      </IncidentRow>
+      {/* The kit's second open incident. "Long lie" is a real detector; its own
+          copy ("still for 20 minutes in Room 4") carries digits and a second
+          room number, so the duration is stated in words and the room dropped. */}
+      <IncidentRow tone="warning" when="Earlier tonight" copy="Walter has been still for an unusually long time." status="Acknowledged" />
+      {responding && (
+        <Card style={{borderRadius: 12, padding: 22, marginTop: 22, opacity: responsePanel, translate: `0 ${responseY}px`}}>
+          <div style={{fontSize: 20, fontWeight: 600, color: C.foregroundMuted, letterSpacing: 1.1}}>RESPONSE</div>
+          <div style={{fontSize: 27, fontWeight: 600, marginTop: 8, display: "flex", alignItems: "center", gap: 12}}>
+            {svgGlyph(L_CHECK_CIRCLE, C.success, 28, 2.2)}<span>Care team is responding.</span>
+          </div>
+        </Card>
+      )}
     </div>
-    <div style={{position: "absolute", bottom: 0, left: 0, right: 0, height: 88, display: "flex", justifyContent: "space-around", alignItems: "center", background: "rgba(255,255,255,.95)", borderTop: `1px solid ${C.border}`, fontSize: 16, fontWeight: 700, color: C.foregroundMuted}}>{([["Alerts", PATH_STATUS, true], ["Handoff", "M4 5h16v3H4Zm0 5.5h16v3H4Zm0 5.5h11v3H4Z", false], ["Residents", PATH_VISITOR, false], ["Settings", "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9.4 4a9.4 9.4 0 0 0-.15-1.6l2.05-1.55-2-3.46-2.4 1a9.5 9.5 0 0 0-2.77-1.6L15.8 2h-4l-.33 2.79a9.5 9.5 0 0 0-2.77 1.6l-2.4-1-2 3.46L6.35 10.4a9.5 9.5 0 0 0 0 3.2L4.3 15.15l2 3.46 2.4-1a9.5 9.5 0 0 0 2.77 1.6L11.8 22h4l.33-2.79a9.5 9.5 0 0 0 2.77-1.6l2.4 1 2-3.46-2.05-1.55c.1-.52.15-1.06.15-1.6Z", false]] as [string, string, boolean][]).map(([label, path, active]) => <span key={label} style={{display: "flex", flexDirection: "column", alignItems: "center", gap: 5, color: active ? C.primary : C.foregroundMuted}}>{svgIcon(path, active ? C.primary : C.foregroundMuted, 21)}{label}</span>)}</div>
+    <TabBar tabs={CARE_TABS} active="alerts" />
+    {local < 72 && (
+      <div style={{position: "absolute", inset: 0, zIndex: 6, background: C.destructive, color: "white",
+                   display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
+                   padding: "0 44px", textAlign: "center", opacity: modalIn * modalOut,
+                   scale: modalScale, translate: `0 ${modalY}px`}}>
+        {svgGlyph(L_TRIANGLE_ALERT, "#ffffff", 94, 2)}
+        <div style={{marginTop: 30, fontSize: 22, fontWeight: 800, letterSpacing: 3.4, color: "rgba(255,255,255,.82)"}}>URGENT ALERT</div>
+        <div style={{marginTop: 14, fontSize: 62, fontWeight: 800, letterSpacing: -1.8, lineHeight: 1}}>Emergency</div>
+        <div style={{marginTop: 16, fontSize: 38, fontWeight: 600, color: "rgba(255,255,255,.92)"}}>Room 101</div>
+        <div style={{marginTop: 46, width: "100%", padding: "20px", borderRadius: 10, background: "#ffffff",
+                     color: C.destructive, fontWeight: 800, fontSize: 27, position: "relative", overflow: "hidden"}}>
+          Acknowledge<Ripple size={ackRipple} opacity={ackRippleFade} color="rgba(153,27,27,.55)" />
+        </div>
+        <div style={{marginTop: 16, width: "100%", padding: "18px", borderRadius: 10,
+                     border: "2px solid rgba(255,255,255,.75)", fontWeight: 700, fontSize: 25}}>View alert</div>
+      </div>
+    )}
   </Device></div></Background>;
 };
 
@@ -351,6 +495,10 @@ const CareScreen = () => {
 // the help beat now carries the reminders checklist as well, so the header and
 // paddings are tighter than they were and the card starts just under the brand
 // mark, which is what buys that card its room.
+// The kiosk page surface is --color-background-mobile, not white: its cards are
+// white ON that, which the previous white-on-white panel could not show. Header
+// is the kit's own lockup -- an .eyebrow reading "MeridianHub · Room <id>", the
+// .title, then the .subhead.
 const HubFrame = ({title, sub, bgOpacity, contentOpacity, panelX, children}: {title: string; sub: string; bgOpacity: number; contentOpacity: number; panelX: number; children: React.ReactNode}) => (
   <Background opacity={bgOpacity}>
     <div style={{position: "absolute", left: 140, top: 142, width: 740, opacity: contentOpacity}}>
@@ -359,10 +507,10 @@ const HubFrame = ({title, sub, bgOpacity, contentOpacity, panelX, children}: {ti
       <div style={{fontSize: 44, fontWeight: 780, lineHeight: 1.08, letterSpacing: -1.5, marginTop: 26}}>{title}</div>
       <div style={{fontSize: 30, color: C.foregroundMuted, lineHeight: 1.38, marginTop: 28}}>{sub}</div>
     </div>
-    <div style={{position: "absolute", right: 215, top: 92, width: 770, minHeight: 850, padding: 44, borderRadius: 42, background: C.surface, boxShadow: "0 30px 80px rgba(12,74,110,.18)", opacity: contentOpacity, translate: `${panelX}px 0`}}>
-      <div style={{fontSize: 20, color: C.primary, fontWeight: 760, letterSpacing: 1.2}}>MERIDIANHUB</div>
-      <h1 style={{fontSize: 44, letterSpacing: -1.6, margin: "12px 0 8px"}}>Hello, Maggie</h1>
-      <p style={{fontSize: 23, lineHeight: 1.3, color: C.foregroundMuted, margin: 0}}>Choose what you need. Your care team is here to help.</p>
+    <div style={{position: "absolute", right: 215, top: 92, width: 770, minHeight: 972, padding: 36, borderRadius: 42, background: C.backgroundMobile, boxShadow: "0 30px 80px rgba(12,74,110,.18)", opacity: contentOpacity, translate: `${panelX}px 0`}}>
+      <div style={{fontSize: 20, color: C.foregroundMuted, fontWeight: 700, margin: "0 0 9px"}}>MeridianHub &middot; Room 101</div>
+      <h1 style={{fontSize: 50, fontWeight: 800, letterSpacing: -1.6, lineHeight: 1.08, margin: 0}}>Hello, Maggie</h1>
+      <p style={{fontSize: 22, lineHeight: 1.35, color: C.foregroundMuted, margin: "14px 0 0"}}>Choose what you need. Your care team is here to help.</p>
       {children}
     </div>
   </Background>
@@ -370,17 +518,21 @@ const HubFrame = ({title, sub, bgOpacity, contentOpacity, panelX, children}: {ti
 
 // Beat 4 -- frames 430-545 (local 0-115). Mounted five frames early so the
 // cross-dissolve out of MeridianCare has something to dissolve to.
-const HUB_ROWS = ["Your request was sent", "A caregiver has seen it", "A caregiver is on the way"];
+const HUB_STEPS = ["Your request was sent", "A caregiver has seen it", "A caregiver is on the way"];
 // The shipped Today's reminders checklist (b14a18b), verbatim. A reminder the
 // resident can tick is a PROMPT, not an observation, which is why it is allowed
 // here while the family-facing "she ate breakfast" row still is not: nothing in
 // the system observes a meal. The shipped card also shows a "n of n done" count
 // and a clock time per row; both are digits, so both are dropped -- the
 // progress bar carries the same information without a number.
+// Four rows, sorted by scheduled time as TodaysReminders does: the morning dose
+// (already taken), lunch, the walk, then the evening dose. Icons are the shipped
+// Lucide set -- Pill / Utensils / Footprints.
 const HUB_REMINDERS: [string, React.ReactNode][] = [
-  ["Take your medication", GLYPH_PILL],
-  ["Time for lunch", GLYPH_MEAL],
-  ["Afternoon walk", GLYPH_WALK],
+  ["Take your medication", L_PILL],
+  ["Time for lunch", L_UTENSILS],
+  ["Afternoon walk", L_FOOTPRINTS],
+  ["Take your medication", L_PILL],
 ];
 const HubHelpScreen = () => {
   const raw = useCurrentFrame();
@@ -389,55 +541,106 @@ const HubHelpScreen = () => {
   const contentOpacity = ramp(raw, [0, 10], [0, 1]);
   // The panel leaves to the left as the visitor card arrives from the right.
   const panelX = clamp(local, [110, 120], [0, -40]);
-  const panelScale = clamp(local, [10, 26], [0.97, 1]);
-  const panelIn = ramp(local, [10, 26], [0, 1]);
-  const remindersIn = ramp(local, [38, 50], [0, 1]);
-  const remindersY = clamp(local, [38, 50], [14, 0]);
-  // Maggie ticks the first reminder off herself: ripple 64-78, the row commits
-  // at 74, the progress bar catches up by 86 -- all before the emergency pill's
-  // 80-95 fade, which is the beat's last action.
-  // Row-wide flash rather than an expanding ring: the row is short and clips
-  // a circle into a lens. Ramps up fast, decays through the commit at 74.
-  const tapFlash = ramp(local, [64, 70, 82], [0, 1, 0]);
-  const ticked = local >= 74;
-  const progress = ramp(local, [74, 86], [0, 100 / 3]);
-  const emergency = ramp(local, [80, 95], [0, 1]);
+  // Phase A: the three-way choice. Phase B: what the kiosk does once one is
+  // pressed -- the grid collapses to the live status card, exactly as
+  // hub-surface.tsx does, which is also what frees the vertical room the
+  // reminders card needs. The swap is a HARD CUT, deliberately: the two stacks
+  // are mutually exclusive mounts, so an opacity ramp on either side cannot
+  // cross-fade anything -- the grid unmounts at once and the card would fade up
+  // from zero, leaving the panel visually empty for most of a second around
+  // absolute frame 470 (measured: card ink fell from 182k to 15k). A real
+  // kiosk repaints instantly too. Only a small scale pop marks the arrival.
+  const requested = local >= 40;
+  const askRipple = clamp(local, [24, 40], [0, 620]);
+  const askRippleFade = ramp(local, [30, 40], [1, 0]);
+  const statusScale = clamp(local, [40, 50], [0.97, 1]);
+  const etaIn = ramp(local, [62, 74], [0, 1]);
+  const remindersIn = ramp(local, [56, 70], [0, 1]);
+  const remindersY = clamp(local, [56, 70], [14, 0]);
+  // Maggie ticks the lunch row off herself. Row-wide flash rather than an
+  // expanding ring: the row is short and clips a circle into a lens.
+  const tapFlash = ramp(local, [84, 90, 100], [0, 1, 0]);
+  const ticked = local >= 92;
+  // Two of four rows done once lunch is ticked (the morning dose is already
+  // taken), so the bar runs to half. Wordless, so it carries no digit.
+  const progress = ramp(local, [92, 104], [25, 50]);
   return <HubFrame title="Help is on the way." sub="And Maggie sees it too — every step, from her own room." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
-    <Panel style={{padding: 26, marginTop: 18, border: "2px solid #b6efd8", background: "#f3fdf8", opacity: panelIn, scale: panelScale}}>
-      <div style={{display: "flex", alignItems: "center", gap: 9, fontWeight: 800, color: C.success, fontSize: 20, letterSpacing: 1}}>{svgIcon(PATH_STATUS, C.success, 22)}<span>HELP STATUS</span></div>
-      <h2 style={{fontSize: 31, lineHeight: 1.15, margin: "12px 0 16px"}}>Help is coming. A caregiver is on the way.</h2>
-      {HUB_ROWS.map((row, i) => {
-        // Rows stagger 14f apart: the dot pops, then its label catches up.
-        const start = 26 + i * 14;
-        const dot = clamp(local, [start, start + 6, start + 12], [0, 1.15, 1]);
-        const label = ramp(local, [start + 4, start + 14], [0, 1]);
-        return <div key={row} style={{display: "flex", alignItems: "center", gap: 15, marginTop: 12, fontSize: 22, color: C.foreground}}>
-          <span style={{width: 18, height: 18, borderRadius: "50%", background: C.success, flexShrink: 0, scale: dot}} />
-          <span style={{opacity: label}}>{row}</span>
-        </div>;
-      })}
-    </Panel>
-    <Panel style={{padding: 18, marginTop: 14, opacity: remindersIn, translate: `0 ${remindersY}px`}}>
-      <div style={{fontSize: 26, fontWeight: 800, letterSpacing: -0.6}}>Today&rsquo;s reminders</div>
-      <div style={{fontSize: 19, color: C.foregroundMuted, marginTop: 5}}>Tap a reminder when you&rsquo;ve done it.</div>
-      <div style={{marginTop: 11, height: 10, borderRadius: 99, background: C.background, border: `2px solid ${C.border}`, overflow: "hidden"}}>
-        <div style={{height: "100%", borderRadius: 99, background: C.success, width: `${progress}%`}} />
+    {!requested && (
+      <div style={{display: "grid", gap: 20, marginTop: 26}}>
+        <ActionButton label="Request assistance" note="Ask a caregiver to come to your room." glyph={L_HEART_HANDSHAKE} bg={C.primary} color="#ffffff">
+          <Ripple size={askRipple} opacity={askRippleFade} />
+        </ActionButton>
+        <ActionButton label="Call family" note="Ask your family contact to call you." glyph={L_PHONE_CALL} bg={C.surface} color={C.foreground} border={`4px solid ${C.primary}`} />
+        <ActionButton label="Emergency help" note="Send an urgent alert to the care team now." glyph={L_BELL_RING} bg={C.destructive} color="#ffffff" />
       </div>
-      {HUB_REMINDERS.map(([label, glyph], i) => {
-        const start = 42 + i * 5;
-        const rowIn = ramp(local, [start, start + 9], [0, 1]);
-        const done = i === 0 && ticked;
-        return <div key={label} style={{display: "flex", alignItems: "center", gap: 13, marginTop: i === 0 ? 13 : 9, padding: "7px 12px", borderRadius: 15,
-                                       border: `2px solid ${done ? "#b6efd8" : C.border}`, background: done ? "#f3fdf8" : C.surface,
-                                       opacity: rowIn, position: "relative", overflow: "hidden"}}>
-          <span style={{width: 40, height: 40, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: done ? C.success : C.muted}}>{svgGlyph(glyph, done ? "#ffffff" : C.primary, 24, 2)}</span>
-          <span style={{flex: 1, fontSize: 21, fontWeight: 740, color: done ? C.foregroundMuted : C.foreground, textDecoration: done ? "line-through" : "none"}}>{label}</span>
-          <span style={{width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${done ? C.success : C.border}`, background: done ? C.success : "transparent"}}>{done && svgGlyph(GLYPH_CHECK, "#ffffff", 16, 3)}</span>
-          {i === 0 && <div style={{position: "absolute", inset: 0, background: C.success, opacity: tapFlash * 0.16, pointerEvents: "none"}} />}
-        </div>;
-      })}
-    </Panel>
-    <div style={{marginTop: 14, borderRadius: 20, background: "#ffe9e5", padding: 18, fontSize: 24, fontWeight: 760, color: C.destructive, display: "flex", alignItems: "center", gap: 11, opacity: emergency}}>{alertIcon(C.destructive, 27)}<span>Emergency help</span></div>
+    )}
+    {requested && <>
+      {/* .status-card: a 12px coloured left border rather than a full keyline --
+          the design system keeps this older kiosk-specific pattern precisely
+          because of its stakes. Position and a check mark carry the step
+          progress, never colour alone. */}
+      <div style={{marginTop: 20, padding: 22, background: C.surface, border: `3px solid ${C.border}`, borderRadius: 20,
+                   borderLeft: `12px solid ${C.primary}`, boxShadow: "0 4px 18px rgba(12,74,110,.12)",
+                   scale: statusScale}}>
+        <div style={{display: "flex", alignItems: "center", gap: 10, color: C.foregroundMuted, fontWeight: 700, fontSize: 20, margin: "0 0 7px"}}>
+          {svgGlyph(L_SHIELD_CHECK, C.foregroundMuted, 24, 2)}<span>Help status</span>
+        </div>
+        <h2 style={{fontSize: 30, lineHeight: 1.15, margin: 0, fontWeight: 700}}>Help is coming. A caregiver is on the way.</h2>
+        <div style={{display: "grid", gap: 8, margin: "15px 0 0"}}>
+          {HUB_STEPS.map((step, i) => {
+            const start = 42 + i * 6;
+            const rowIn = ramp(local, [start, start + 10], [0, 1]);
+            const done = local >= start + 6;
+            const tint = done ? C.success : C.foregroundMuted;
+            return <div key={step} style={{display: "flex", alignItems: "center", gap: 12, fontSize: 20, fontWeight: 700, color: tint, opacity: rowIn}}>
+              {svgGlyph(done ? L_CHECK_CIRCLE : L_CLOCK, tint, 26, 2)}<span>{step}</span>
+            </div>;
+          })}
+        </div>
+        {/* .eta. The shipped surface really does derive this from recent
+            acknowledgement times and label its confidence, so the block is
+            honest -- but its figure is a digit, so the derived estimate is
+            stated in words and the sub-line keeps naming what it rests on. */}
+        <div style={{marginTop: 16, padding: 14, background: C.border, borderRadius: 12, fontWeight: 800, fontSize: 21, opacity: etaIn}}>
+          Someone should reach you shortly.
+          <span style={{display: "block", color: C.foregroundMuted, fontWeight: 600, fontSize: 18, lineHeight: 1.35, marginTop: 6}}>
+            Based on this facility&rsquo;s recent staff acknowledgement times.
+          </span>
+        </div>
+      </div>
+      <div style={{marginTop: 16, padding: 22, background: C.surface, border: `3px solid ${C.border}`, borderRadius: 20,
+                   boxShadow: "0 4px 18px rgba(12,74,110,.12)", opacity: remindersIn, translate: `0 ${remindersY}px`}}>
+        {/* .reminders-head also carries a "{done} of {total} done" count. That is
+            a digit, and the progress bar states the same thing wordlessly. */}
+        <div style={{fontSize: 28, fontWeight: 700, letterSpacing: -0.6}}>Today&rsquo;s reminders</div>
+        <div style={{fontSize: 19, color: C.foregroundMuted, marginTop: 5}}>Tap a reminder when you&rsquo;ve done it.</div>
+        <div style={{marginTop: 12, height: 13, borderRadius: 999, background: C.background, border: `2px solid ${C.borderStrong}`, overflow: "hidden"}}>
+          <div style={{height: "100%", borderRadius: 999, background: C.success, width: `${progress}%`}} />
+        </div>
+        <div style={{display: "grid", gap: 8, marginTop: 13}}>
+          {HUB_REMINDERS.map(([label, glyph], i) => {
+            const start = 60 + i * 4;
+            const rowIn = ramp(local, [start, start + 9], [0, 1]);
+            // Row 0 is the morning dose, already taken. Row 1 is lunch, which
+            // Maggie ticks on screen. `nextId` is the first not-done row, so
+            // the UP NEXT tag starts on lunch and moves to the walk.
+            const done = i === 0 || (i === 1 && ticked);
+            const next = ticked ? i === 2 : i === 1;
+            return <div key={`${label}${i}`} style={{display: "flex", alignItems: "center", gap: 15, minHeight: 48, padding: "7px 13px", borderRadius: 16,
+                                           border: next ? `4px solid ${C.primary}` : `3px solid ${C.borderStrong}`,
+                                           background: done ? C.background : C.surface, opacity: rowIn, position: "relative", overflow: "hidden"}}>
+              <span style={{width: 38, height: 38, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: done ? C.success : C.border}}>{svgGlyph(glyph, done ? "#ffffff" : C.primary, 22, 2)}</span>
+              <span style={{flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 10}}>
+                <span style={{fontSize: 19, fontWeight: 700, color: done ? C.foregroundMuted : C.foreground, textDecoration: done ? "line-through" : "none"}}>{label}</span>
+                {next && <span style={{flex: "none", fontSize: 14, fontWeight: 800, color: "#ffffff", background: C.primary, padding: "3px 10px", borderRadius: 999, textTransform: "uppercase", letterSpacing: 0.6}}>Up next</span>}
+              </span>
+              <span style={{width: 28, height: 28, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: `3px solid ${done ? C.success : C.borderStrong}`, background: done ? C.success : "transparent"}}>{done && svgGlyph(L_CHECK, "#ffffff", 15, 3)}</span>
+              {i === 1 && <div style={{position: "absolute", inset: 0, background: C.success, opacity: tapFlash * 0.16, pointerEvents: "none"}} />}
+            </div>;
+          })}
+        </div>
+      </div>
+    </>}
   </HubFrame>;
 };
 
@@ -456,35 +659,71 @@ const HubVisitorScreen = () => {
   const brighten = clamp(local, [76, 92], [1, 1.22]);
   const answer = ramp(local, [92, 110], [0, 1]);
   return <HubFrame title="Your voice matters." sub="Not just falls — an unexpected visitor is Maggie's call to make." bgOpacity={bgOpacity} contentOpacity={contentOpacity} panelX={panelX}>
-    <Panel style={{padding: 30, marginTop: 32, border: "2px solid #bae6fd"}}>
-      <div style={{display: "flex", alignItems: "center", gap: 9, fontWeight: 800, color: C.primary, fontSize: 20, letterSpacing: 1}}>{svgIcon(PATH_VISITOR, C.primary, 22)}<span>VISITOR CHECK</span></div>
-      <h2 style={{fontSize: 37, lineHeight: 1.1, margin: "14px 0"}}>Is this person expected?</h2>
-      <p style={{fontSize: 24, lineHeight: 1.35, color: C.foregroundMuted}}>Someone we do not recognise was seen at the entrance.</p>
-      <div style={{display: "flex", gap: 16, marginTop: 27, opacity: buttonIn, translate: `0 ${buttonY}px`}}>
-        <div style={{flex: 1, borderRadius: 18, padding: "19px 16px", background: C.success, color: "white", fontWeight: 790, fontSize: 21, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, position: "relative", overflow: "hidden", filter: `brightness(${brighten})`}}>{svgIcon(PATH_STATUS, "#ffffff", 22)}<span>Yes, expected</span><Ripple size={ripple} opacity={rippleFade} /></div>
-        <div style={{flex: 1, borderRadius: 18, padding: "19px 16px", background: C.destructive, color: "white", fontWeight: 790, fontSize: 21, display: "flex", alignItems: "center", justifyContent: "center", gap: 9}}>{alertIcon("#ffffff", 22)}<span>No, get help</span></div>
+    {/* .visitor-card: a 5px full primary keyline, not a left border -- the kiosk
+        reserves the left-border pattern for live help status. */}
+    <div style={{marginTop: 30, padding: 28, background: C.surface, border: `5px solid ${C.primary}`, borderRadius: 20}}>
+      <div style={{display: "flex", alignItems: "center", gap: 10, color: C.foregroundMuted, fontWeight: 700, fontSize: 21, margin: "0 0 9px"}}>
+        {svgGlyph(L_USER_ROUND_CHECK, C.foregroundMuted, 25, 2)}<span>Visitor check</span>
       </div>
-    </Panel>
-    <div style={{marginTop: 28, opacity: answer, borderRadius: 18, padding: 22, background: "#edfdf5", fontWeight: 740, fontSize: 25, color: C.success, display: "flex", alignItems: "center", gap: 12}}>{svgIcon(PATH_STATUS, C.success, 26)}<span>Thank you. The care team has been told to come and check.</span></div>
+      <h2 style={{fontSize: 42, lineHeight: 1.1, margin: 0, fontWeight: 700}}>Is this person expected?</h2>
+      {/* The kit's own detail line, minus its "Detected at 2:15pm." sentence. */}
+      <p style={{fontSize: 24, lineHeight: 1.4, color: C.foregroundMuted, margin: "18px 0"}}>An unfamiliar visitor was detected at your assigned entry camera.</p>
+      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, opacity: buttonIn, translate: `0 ${buttonY}px`}}>
+        <div style={{minHeight: 88, borderRadius: 16, background: C.success, color: "white", fontWeight: 800, fontSize: 24, display: "flex", alignItems: "center", justifyContent: "center", gap: 12, position: "relative", overflow: "hidden", filter: `brightness(${brighten})`}}>{svgGlyph(L_CHECK_CIRCLE, "#ffffff", 30, 2.25)}<span>Yes, expected</span><Ripple size={ripple} opacity={rippleFade} /></div>
+        <div style={{minHeight: 88, borderRadius: 16, background: C.destructive, color: "white", fontWeight: 800, fontSize: 24, display: "flex", alignItems: "center", justifyContent: "center", gap: 12}}>{svgGlyph(L_BELL_RING, "#ffffff", 30, 2.25)}<span>No, get help</span></div>
+      </div>
+    </div>
+    {/* .notice.success. The confirmation is the one the shipped surface actually
+        returns for an "expected" answer. The comp previously showed the *denied*
+        branch's copy here -- promising a caregiver would come and check after
+        Maggie said the visitor was expected, which is not what the code does. */}
+    <div style={{marginTop: 24, padding: 22, borderRadius: 14, background: C.surface, border: `4px solid ${C.success}`,
+                 fontWeight: 800, fontSize: 26, lineHeight: 1.35, color: C.success, display: "flex", alignItems: "center", gap: 14, opacity: answer}}>
+      {svgGlyph(L_CHECK_CIRCLE, C.success, 32, 2.2)}<span>Thank you. Your answer was saved.</span>
+    </div>
   </HubFrame>;
 };
 
 // Beat 6 -- frames 675-840 (local 0-165). Carries the 6f fade to deck navy
 // that hands the last thirty frames to the end card.
+const FAMILY_TABS: Tab[] = [
+  {key: "today", label: "Today", glyph: L_SUN},
+  {key: "visitors", label: "Visitors", glyph: L_DOOR_OPEN},
+  {key: "updates", label: "Updates", glyph: L_BELL},
+  {key: "privacy", label: "Privacy", glyph: L_LOCK},
+];
+// A section rule from the Updates screen: 12/600 uppercase, muted.
+const FamilySection = ({children, style}: {children: React.ReactNode; style?: React.CSSProperties}) => (
+  <div style={{fontSize: 20, fontWeight: 600, color: C.foregroundMuted, textTransform: "uppercase", letterSpacing: 1, ...style}}>{children}</div>
+);
 const FamilyScreen = () => {
   const raw = useCurrentFrame();
   const local = raw - T.familyOffset;
   const contentOpacity = ramp(raw, [0, 10], [0, 1]);
   const phoneY = clamp(local, [0, 12], [24, 0]);
-  const notification = ramp(local, [8, 26], [0, 1]);
-  const notificationY = clamp(local, [8, 26], [-80, 0]);
-  const staffLabel = ramp(local, [60, 75], [0, 1]);
-  const responseCard = ramp(local, [75, 95], [0, 1]);
-  const responseY = clamp(local, [75, 95], [24, 0]);
+  // Beat 6 shows both of the Family kit's load-bearing tabs, because the
+  // mandated content corrections land on both: Today first -- the calm daily
+  // baseline -- then a real tab change to Updates, where the alert and the
+  // staff response arrive. The tab bar does the transition, as it does in the app.
+  const todayIn = ramp(local, [8, 22], [0, 1]);
+  const todayOut = ramp(local, [58, 64], [1, 0]);
+  const onUpdates = local >= 62;
+  const updatesIn = ramp(local, [64, 74], [0, 1]);
+  const notification = ramp(local, [78, 94], [0, 1]);
+  const notificationY = clamp(local, [78, 94], [-70, 0]);
+  const responseCard = ramp(local, [100, 118], [0, 1]);
+  const responseY = clamp(local, [100, 118], [24, 0]);
   // Resolution stated in colour, not in a new line of copy: the amber ring on
   // the original alert cools to the green of the response.
-  const resolved = interpolateColors(ramp(local, [120, 145], [0, 1]), [0, 1], [C.warning, C.success]);
+  const resolved = interpolateColors(ramp(local, [126, 150], [0, 1]), [0, 1], [C.warning, C.success]);
   const toNavy = ramp(raw, [166, 172], [0, 1]);
+  // The active tint crosses over with the tab change rather than snapping.
+  const tabShift = ramp(local, [62, 70], [0, 1]);
+  const tabTint = (key: string) => {
+    if (key === "today") return interpolateColors(tabShift, [0, 1], [C.primary, C.foregroundMuted]);
+    if (key === "updates") return interpolateColors(tabShift, [0, 1], [C.foregroundMuted, C.primary]);
+    return C.foregroundMuted;
+  };
   return <Background>
     <div style={{position: "absolute", left: 200, top: 158, width: 790, opacity: contentOpacity}}>
       <AppName>MeridianFamily</AppName>
@@ -492,13 +731,72 @@ const FamilyScreen = () => {
       <div style={{fontSize: 44, lineHeight: 1.08, letterSpacing: -1.5, fontWeight: 780, marginTop: 26}}>Stay informed. Stay close.</div>
       <StoryLine>And her family watches the same story — including how it ends.</StoryLine>
     </div>
-    <div style={{position: "absolute", right: 280, top: 55, opacity: contentOpacity, translate: `0 ${phoneY}px`}}><Device label="MeridianFamily updates">
-      <div style={{padding: "75px 28px 42px"}}>
-        <h1 style={{fontSize: 42, margin: "4px 0 22px"}}>Updates</h1>
-        <Panel style={{padding: 24, opacity: notification, translate: `0 ${notificationY}px`, borderLeft: `7px solid ${resolved}`}}><div style={{display: "flex", gap: 15}}>{alertIcon(C.warning, 30)}<div><div style={{fontSize: 26, fontWeight: 760, lineHeight: 1.25}}>Maggie may need help in Room 101.</div><div style={{fontSize: 20, color: C.foregroundMuted, marginTop: 8}}>Care team has been alerted.</div></div></div></Panel>
-        <div style={{marginTop: 26, fontSize: 22, fontWeight: 750, color: C.foregroundMuted, opacity: staffLabel}}>STAFF RESPONSES</div>
-        <Panel style={{padding: 24, marginTop: 12, opacity: responseCard, translate: `0 ${responseY}px`}}><div style={{display: "flex", gap: 15}}>{svgIcon(PATH_STATUS, C.success, 30)}<div><div style={{fontSize: 26, fontWeight: 760, lineHeight: 1.25}}>A caregiver is responding.</div><div style={{fontSize: 20, color: C.foregroundMuted, marginTop: 8}}>Maggie is not alone.</div></div></div></Panel>
-      </div>
+    <div style={{position: "absolute", right: 280, top: 55, opacity: contentOpacity, translate: `0 ${phoneY}px`}}><Device label="MeridianFamily daily summary and updates">
+      {!onUpdates && (
+        <div style={{padding: "70px 26px 0", opacity: todayIn * todayOut}}>
+          <h1 style={{fontWeight: 600, fontSize: 40, letterSpacing: -1.1, margin: "6px 0 20px"}}>Today</h1>
+          {/* DailySummary's success-tinted card. Its headline was "Maggie had a
+              good day" -- a wellbeing judgement pose cannot make -- and its
+              detail line claimed she "ate all three meals", which nothing in
+              the system observes. Both are replaced by the rollup category and
+              the shipped room-attributed sentence. */}
+          <div style={{background: "rgba(5,150,105,.06)", border: "1px solid rgba(5,150,105,.2)", borderRadius: 20, padding: 24}}>
+            <div style={{display: "flex", gap: 14, alignItems: "center"}}>
+              <span style={{width: 52, height: 52, borderRadius: 15, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `${C.successBase}1f`}}>
+                {svgGlyph(L_ACTIVITY, C.success, 30, 2.1)}
+              </span>
+              <div>
+                <div style={{fontWeight: 600, fontSize: 28, letterSpacing: -0.5}}>Usual room movement</div>
+                <div style={{fontSize: 20, color: C.foregroundMuted, marginTop: 3}}>Today</div>
+              </div>
+            </div>
+            <div style={{fontSize: 23, lineHeight: 1.4, color: C.foregroundMuted, marginTop: 16}}>
+              The movement we saw in Maggie&rsquo;s room followed its usual rhythm today.
+            </div>
+            <div style={{height: 1, background: C.border, margin: "18px 0"}} />
+            <div style={{display: "flex", flexDirection: "column", gap: 12}}>
+              {["A new visitor came to the main entrance.", "Overnight movement followed its usual rhythm too."].map((line, i) => {
+                const rowIn = ramp(local, [26 + i * 8, 38 + i * 8], [0, 1]);
+                return <div key={line} style={{display: "flex", gap: 12, alignItems: "flex-start", fontSize: 21, lineHeight: 1.35, color: C.foregroundMuted, opacity: rowIn}}>
+                  {/* The kit draws these bullets as U+25CF. A span is a shape, not a glyph. */}
+                  <span style={{width: 10, height: 10, borderRadius: "50%", background: C.primary, flexShrink: 0, marginTop: 9}} />
+                  <span>{line}</span>
+                </div>;
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+      {onUpdates && (
+        <div style={{padding: "70px 26px 0", opacity: updatesIn}}>
+          <h1 style={{fontWeight: 600, fontSize: 40, letterSpacing: -1.1, margin: "6px 0 20px"}}>Updates</h1>
+          <FamilySection style={{marginBottom: 11}}>Staff responses</FamilySection>
+          {/* Both staff cards keep their space reserved from the tab change, so
+              neither arrival reflows the sections under it. */}
+          <Card style={{borderRadius: 20, padding: 22, borderLeft: `7px solid ${resolved}`, opacity: notification, translate: `0 ${notificationY}px`}}>
+            <div style={{display: "flex", gap: 14}}>{svgGlyph(L_TRIANGLE_ALERT, C.warning, 29, 2.2)}<div>
+              <div style={{fontSize: 25, fontWeight: 600, lineHeight: 1.28}}>Maggie may need help in Room 101.</div>
+              <div style={{fontSize: 20, color: C.foregroundMuted, marginTop: 7}}>Care team has been alerted.</div>
+            </div></div>
+          </Card>
+          {/* The kit's staff-response line ended "staff responded in 90 seconds."
+              No such figure is verified end to end, so it says what is actually
+              known: someone came, and stayed. */}
+          <Card style={{borderRadius: 20, padding: 22, marginTop: 12, opacity: responseCard, translate: `0 ${responseY}px`}}>
+            <div style={{display: "flex", gap: 14}}>{svgGlyph(L_CHECK_CIRCLE, C.success, 29, 2.2)}<div>
+              <div style={{fontSize: 25, fontWeight: 600, lineHeight: 1.28}}>Maggie needed help in Room 101 — staff responded and stayed with her.</div>
+              <div style={{fontSize: 20, color: C.foregroundMuted, marginTop: 7}}>Maggie is not alone.</div>
+            </div></div>
+          </Card>
+          <FamilySection style={{margin: "20px 0 11px"}}>Visitors</FamilySection>
+          <Card style={{borderRadius: 20, padding: 22}}>
+            <div style={{display: "flex", gap: 14, alignItems: "center"}}>{svgGlyph(L_DOOR_OPEN, C.primary, 27, 2.1)}
+              <div style={{fontSize: 22, lineHeight: 1.3}}>New visitor detected at Main Entrance.</div>
+            </div>
+          </Card>
+        </div>
+      )}
+      <TabBar tabs={FAMILY_TABS} active={onUpdates ? "updates" : "today"} activeColor={tabTint} />
     </Device></div>
     <AbsoluteFill style={{background: C.deckNavy, opacity: toNavy, pointerEvents: "none"}} />
   </Background>;
