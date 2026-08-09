@@ -49,6 +49,11 @@ struct ResidentProfilesView: View {
                 }
             }
             .navigationTitle("Residents")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HelpToolbarButton(topic: .residents)
+                }
+            }
         }
         .task { await viewModel.load() }
     }

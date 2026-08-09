@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UpdatesView: View {
     @StateObject private var viewModel = UpdatesViewModel()
+    @State private var isShowingHelp = false
 
     private var incidentUpdates: [NotificationRow] {
         viewModel.notifications.filter { $0.incidentId != nil }
@@ -42,6 +43,20 @@ struct UpdatesView: View {
                 }
             }
             .navigationTitle("Updates")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isShowingHelp = true
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .frame(minWidth: MeridianTouchTarget.minSize, minHeight: MeridianTouchTarget.minSize)
+                    }
+                    .accessibilityLabel("Help")
+                }
+            }
+            .sheet(isPresented: $isShowingHelp) {
+                HelpTourView(topic: .updates)
+            }
         }
         .task { viewModel.start() }
         .onDisappear { viewModel.stop() }

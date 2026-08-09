@@ -53,6 +53,23 @@ button[aria-busy="true"] { cursor: progress; }
 .title { font-size: clamp(2.5rem, 6vw, 4rem); line-height: 1.08; margin: 0; font-weight: 800; letter-spacing: -0.03em; }
 .subhead { color: var(--foreground-muted); font-size: clamp(1.375rem, 3vw, 1.6rem); margin: 16px 0 0; }
 
+/* Help sits beside the greeting, not over it. On a narrow screen it drops
+   below rather than shrinking — a help control that shrinks to fit is the
+   first thing an unsteady hand misses. */
+.hub-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.help-button { min-height: 72px; border-radius: 16px; padding: 16px 24px; background: #fff; color: var(--primary); border: 4px solid var(--primary); font-size: 24px; font-weight: 800; display: flex; align-items: center; gap: 14px; flex: none; }
+.help-button:hover { background: #e0f2fe; }
+.help-button svg { width: 36px; height: 36px; flex: none; }
+
+.help-panel { margin-top: 24px; padding: 28px; }
+.help-heading { font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.15; margin: 0 0 20px; }
+.help-list { list-style: none; margin: 0 0 24px; padding: 0; display: grid; gap: 24px; }
+.help-list li { display: flex; align-items: flex-start; gap: 18px; }
+.help-list svg { width: 44px; height: 44px; flex: none; color: var(--primary); stroke-width: 2.25; }
+.help-item-title { font-size: 26px; font-weight: 800; margin: 0 0 6px; }
+.help-item-body { font-size: 22px; line-height: 1.4; color: var(--foreground-muted); margin: 0; }
+.help-footer { font-size: 22px; line-height: 1.4; font-weight: 700; margin: 0 0 24px; padding: 18px; background: #e0f2fe; border-radius: 12px; }
+
 /* Primary actions: 112px tall, 24px gaps — comfortably past the 60x60pt
    target and the 16px separation that stops mis-taps with a tremor. */
 .action-grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 28px; }

@@ -61,6 +61,11 @@ struct AlertFeedView: View {
                 }
             }
             .navigationTitle("Alerts")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HelpToolbarButton(topic: .alerts)
+                }
+            }
             .navigationDestination(for: String.self) { incidentId in
                 IncidentDetailHost(incidentId: incidentId, viewModel: viewModel)
             }

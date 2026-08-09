@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   HeartHandshake,
+  HelpCircle,
   Loader2,
   PhoneCall,
   Pill,
@@ -161,6 +162,9 @@ export function HubSurface({ initialState }: { initialState: HubState }) {
   // "Call family" can never block "Emergency help".
   const [busyKind, setBusyKind] = useState<AssistanceKind | "visitor" | null>(null);
   const [now, setNow] = useState(0);
+  // Never auto-opens. Help on this screen is something the resident reaches
+  // for, never something that interrupts them.
+  const [helpOpen, setHelpOpen] = useState(false);
   const busyRef = useRef(busyKind);
   busyRef.current = busyKind;
 
@@ -286,11 +290,31 @@ export function HubSurface({ initialState }: { initialState: HubState }) {
 
   return (
     <main className="hub-shell">
-      <header>
-        <p className="eyebrow">MeridianHub · Room {state.profile.room_id}</p>
-        <h1 className="title">Hello, {state.profile.display_name}</h1>
-        <p className="subhead">Choose what you need. Your care team is here to help.</p>
+      <header className="hub-header">
+        <div>
+          <p className="eyebrow">MeridianHub · Room {state.profile.room_id}</p>
+          <h1 className="title">Hello, {state.profile.display_name}</h1>
+          <p className="subhead">Choose what you need. Your care team is here to help.</p>
+        </div>
+        {/* Deliberately NOT a coach-mark tour. A one-time walkthrough assumes
+            the resident will remember it, which is the wrong assumption for
+            this audience, and an overlay would sit on top of Emergency help.
+            This is a plain toggle that expands in place, can be opened as
+            many times as they like, and pushes content down instead of
+            covering it. */}
+        <button
+          className="help-button"
+          type="button"
+          aria-expanded={helpOpen}
+          aria-controls="hub-help-panel"
+          onClick={() => setHelpOpen((open) => !open)}
+        >
+          <HelpCircle aria-hidden="true" />
+          <span>{helpOpen ? "Hide help" : "What can I do here?"}</span>
+        </button>
       </header>
+
+      {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
 
       {!online && (
         <div className="connection" role="alert">
@@ -403,6 +427,69 @@ function ActionButton({
       </span>
       <span className="action-note">{busy ? "Sending…" : note}</span>
     </button>
+  );
+}
+
+/** Plain-language explanation of this screen.
+ *
+ *  Written to be read cold, by someone who may have read it yesterday and not
+ *  remember. No step counter, no "next", no progress — nothing that implies
+ *  there is a sequence to get through or a state to be left in halfway. Each
+ *  item stands alone, and the whole thing is dismissed by one large button.
+ */
+function HelpPanel({ onClose }: { onClose: () => void }) {
+  const items = [
+    {
+      icon: <HeartHandshake aria-hidden="true" />,
+      title: "Request assistance",
+      body: "Press this when you would like a caregiver to come to your room. It is not an emergency — use it for anything you need help with.",
+    },
+    {
+      icon: <PhoneCall aria-hidden="true" />,
+      title: "Call family",
+      body: "This lets your family know you would like to speak with them. They will be told you asked, and they will call you.",
+    },
+    {
+      icon: <BellRing aria-hidden="true" />,
+      title: "Emergency help",
+      body: "Press this if you need help right away. It reaches the care team faster than anything else on this screen. You can always press it, even while you are waiting for something else.",
+    },
+    {
+      icon: <UserRoundCheck aria-hidden="true" />,
+      title: "Visitor check",
+      body: "If someone we do not recognise comes to the door, this screen will ask if you were expecting them. If you are not sure, choose “No, get help”. Nobody will mind.",
+    },
+    {
+      icon: <Pill aria-hidden="true" />,
+      title: "Medication",
+      body: "When it is time for your medication, this screen will tell you. You do not need to do anything — a caregiver brings it to you.",
+    },
+  ];
+
+  return (
+    <section className="hub-card help-panel" id="hub-help-panel" aria-label="What you can do on this screen">
+      <h2 className="help-heading">What you can do here</h2>
+      <ul className="help-list">
+        {items.map((item) => (
+          <li key={item.title}>
+            {item.icon}
+            <div>
+              <p className="help-item-title">{item.title}</p>
+              <p className="help-item-body">{item.body}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="help-footer">
+        If anything is confusing or this screen is not working, press the call button by your bed or call out for
+        staff. Someone will come.
+      </p>
+      <button className="action-button secondary" type="button" onClick={onClose}>
+        <span>
+          <CheckCircle2 aria-hidden="true" /> Close help
+        </span>
+      </button>
+    </section>
   );
 }
 

@@ -7,6 +7,7 @@ import SwiftUI
 struct PrivacyView: View {
     let residents: [FamilyLinkedResident]
     @EnvironmentObject var auth: AuthViewModel
+    @State private var isShowingHelp = false
 
     var body: some View {
         NavigationStack {
@@ -67,6 +68,20 @@ struct PrivacyView: View {
                 }
             }
             .navigationTitle("Privacy & account")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isShowingHelp = true
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .frame(minWidth: MeridianTouchTarget.minSize, minHeight: MeridianTouchTarget.minSize)
+                    }
+                    .accessibilityLabel("Help")
+                }
+            }
+            .sheet(isPresented: $isShowingHelp) {
+                HelpTourView(topic: .privacy)
+            }
         }
     }
 }

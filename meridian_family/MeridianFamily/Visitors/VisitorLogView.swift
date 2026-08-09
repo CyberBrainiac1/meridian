@@ -2,6 +2,7 @@ import SwiftUI
 
 struct VisitorLogView: View {
     @StateObject private var viewModel = VisitorLogViewModel()
+    @State private var isShowingHelp = false
 
     var body: some View {
         NavigationStack {
@@ -44,6 +45,20 @@ struct VisitorLogView: View {
             .background(MeridianColor.background)
             .navigationTitle("Visitors")
             .refreshable { await viewModel.load() }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isShowingHelp = true
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .frame(minWidth: MeridianTouchTarget.minSize, minHeight: MeridianTouchTarget.minSize)
+                    }
+                    .accessibilityLabel("Help")
+                }
+            }
+            .sheet(isPresented: $isShowingHelp) {
+                HelpTourView(topic: .visitors)
+            }
         }
         .task { viewModel.start() }
         .onDisappear { viewModel.stop() }

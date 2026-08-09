@@ -73,6 +73,11 @@ struct ShiftHandoffView: View {
             }
             .background(MeridianColor.background)
             .navigationTitle("Shift handoff")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HelpToolbarButton(topic: .handoff)
+                }
+            }
             .refreshable { await viewModel.load() }
         }
         .task { await viewModel.load() }
