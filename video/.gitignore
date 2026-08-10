@@ -1,8 +1,23 @@
 node_modules
-out/
 dist
 .DS_Store
 .env
 
-# Ignore the output video from Git but not videos you import into src/.
+# Renders are reproducible from source -- `npm run render` rebuilds them
+# byte-for-byte from the same inputs, so they do not belong in git.
+out/
 out
+
+# The score is NOT committed. It is licensed to us for use, not for
+# redistribution from a public repo. Re-download it to public/music.mp3:
+#   AKTASOK, "Hopeful Ambient Background", Pixabay Content License
+#   https://pixabay.com/music/corporate-hopeful-ambient-background-180353/
+public/music.mp3
+
+# Everything else under public/ and assets/source/ IS committed, overriding
+# the repo-root `*.mp4` rule. These clips cannot be regenerated: fall.mp4 came
+# out of a one-shot PixVerse generation (non-deterministic -- the same prompt
+# will not return the same footage), and every skeleton clip is derived from
+# it. Losing them means the pitch video can never be rebuilt.
+!public/*.mp4
+!assets/source/*.mp4

@@ -1,0 +1,26 @@
+:root{
+  /* Canonical product palette, mirrored from meridian_software/design-tokens/tokens.json.
+     If you change a value here it is out of sync with the repo -- update both in the same commit. */
+  --color-primary:#0369A1;
+  --color-primary-alt:#0891B2;
+  --color-success:#059669;
+  --color-warning:#B45309;
+  --color-destructive:#DC2626;
+  --color-foreground:#0C4A6E;
+  --color-muted:#E7EFF5;
+  --color-border:#E0F2FE;
+  --color-background:#F0F9FF;
+  --color-background-mobile:#ECFEFF;
+  --color-surface:#FFFFFF;
+  --color-on-primary:#FFFFFF;
+  --color-on-destructive:#FFFFFF;
+  --color-foreground-muted:#2F5D77;
+  --color-success-strong:#047857;
+  --color-warning-strong:#92400E;
+  --color-destructive-strong:#991B1B;
+  --severity-info:var(--color-primary);
+  --severity-warning:var(--color-warning);
+  --severity-critical:var(--color-destructive);
+  --demo-skeleton-bg:#05060A;
+  --demo-skeleton-accent:#22FFC2;
+}
