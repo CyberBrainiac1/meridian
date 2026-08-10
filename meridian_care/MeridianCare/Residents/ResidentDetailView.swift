@@ -41,6 +41,8 @@ struct ResidentDetailView: View {
 
                 medications
 
+                schedule
+
                 if !careDetails.isEmpty {
                     DetailSection(title: "Care notes") {
                         ForEach(careDetails, id: \.label) { row in
@@ -126,6 +128,26 @@ struct ResidentDetailView: View {
                     .padding(.top, MeridianSpacing.unit)
                 ForEach(viewModel.prnMedications) { medication in
                     PrnMedicationRow(medication: medication)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var schedule: some View {
+        DetailSection(title: "Today's schedule") {
+            if viewModel.activitySlots.isEmpty {
+                Text("No scheduled activities.")
+                    .font(MeridianFont.body(15))
+                    .foregroundStyle(MeridianColor.foregroundMuted)
+            } else {
+                ForEach(viewModel.activitySlots) { slot in
+                    ActivitySlotRow(
+                        slot: slot,
+                        isRecording: viewModel.isRecording(slot)
+                    ) { status in
+                        Task { await viewModel.record(slot, as: status) }
+                    }
                 }
             }
         }
@@ -347,6 +369,88 @@ private struct MedicationDoseRow: View {
                 .stroke(
                     dose.isOverdue ? MeridianColor.destructive : MeridianColor.border,
                     lineWidth: dose.isOverdue ? 2 : 1
+                )
+        )
+    }
+}
+
+private struct ActivitySlotRow: View {
+    let slot: ActivitySlot
+    let isRecording: Bool
+    let onRecord: (ActivityCompletionStatus) -> Void
+
+    private static let actions: [ActivityCompletionStatus] = [.done, .skipped, .missed]
+
+    private var statusLabel: String {
+        slot.isOverdue ? "Overdue" : slot.status.label
+    }
+
+    private var statusColor: Color {
+        if slot.isOverdue { return MeridianColor.destructiveStrong }
+        switch slot.status {
+        case .outstanding: return MeridianColor.primary
+        case .done: return MeridianColor.successStrong
+        case .skipped: return MeridianColor.warningStrong
+        case .missed: return MeridianColor.destructiveStrong
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeridianSpacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: MeridianSpacing.xs) {
+                Text(MeridianFormat.clockTime(slot.scheduledFor))
+                    .font(MeridianFont.bodyMedium(17))
+                    .foregroundStyle(slot.isOverdue ? MeridianColor.destructiveStrong : MeridianColor.foreground)
+                Spacer()
+                if isRecording {
+                    ProgressView().tint(MeridianColor.foregroundMuted)
+                }
+                Text(statusLabel)
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(statusColor.opacity(0.12), in: Capsule())
+                    .foregroundStyle(statusColor)
+            }
+
+            Label(slot.label, systemImage: slot.activityType.symbolName)
+                .font(MeridianFont.bodyMedium(16))
+                .foregroundStyle(MeridianColor.foreground)
+
+            if let completionNote = slot.completionNote {
+                Text(completionNote)
+                    .font(.caption)
+                    .foregroundStyle(MeridianColor.foregroundMuted)
+            }
+
+            if slot.status == .outstanding {
+                HStack(spacing: MeridianTouchTarget.minSpacing) {
+                    ForEach(Self.actions, id: \.self) { status in
+                        Button {
+                            onRecord(status)
+                        } label: {
+                            Text(status.label)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(MeridianButtonStyle(kind: status == .done ? .success : .secondary))
+                        .disabled(isRecording)
+                        .accessibilityLabel("\(status.label) — \(slot.label) at \(MeridianFormat.clockTime(slot.scheduledFor))")
+                    }
+                }
+                .padding(.top, MeridianSpacing.unit)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(MeridianSpacing.sm)
+        .background(
+            (slot.isOverdue ? MeridianColor.destructive.opacity(0.08) : MeridianColor.background),
+            in: RoundedRectangle(cornerRadius: MeridianRadius.control)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: MeridianRadius.control)
+                .stroke(
+                    slot.isOverdue ? MeridianColor.destructive : MeridianColor.border,
+                    lineWidth: slot.isOverdue ? 2 : 1
                 )
         )
     }

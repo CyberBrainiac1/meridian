@@ -212,3 +212,76 @@ extension MeridianFormat {
         return clockTime(date)
     }
 }
+
+// MARK: - Daily care activities (meals, walks, and similar)
+//
+// Generalizes the medication-schedule pattern to non-medication recurring
+// activities. Kept as its own model rather than folded into Medication/
+// MedicationDose: a walk has no dose or route, and conflating "took their
+// pills" with "went for a walk" would blur the medication record, which is
+// a real clinical/legal document.
+
+enum ActivityType: String, Codable {
+    case mealBreakfast = "meal_breakfast"
+    case mealLunch = "meal_lunch"
+    case mealDinner = "meal_dinner"
+    case walk, bathing, activity
+
+    var symbolName: String {
+        switch self {
+        case .mealBreakfast, .mealLunch, .mealDinner: return "fork.knife"
+        case .walk: return "figure.walk"
+        case .bathing: return "shower.fill"
+        case .activity: return "figure.socialdance"
+        }
+    }
+}
+
+enum ActivityCompletionStatus: String, Codable {
+    case outstanding, done, skipped, missed
+
+    var label: String {
+        switch self {
+        case .outstanding: return "Due"
+        case .done: return "Done"
+        case .skipped: return "Skipped"
+        case .missed: return "Missed"
+        }
+    }
+}
+
+/// public.facility_activity_schedule — one row per activity slot, mirroring
+/// MedicationDose's shape exactly so the two can share list/notification code.
+struct ActivitySlot: Codable, Identifiable, Equatable {
+    let activityId: String
+    let residentId: String
+    let residentName: String
+    let roomId: String?
+    let activityType: ActivityType
+    let label: String
+    let scheduledFor: Date
+    let status: ActivityCompletionStatus
+    let completedBy: String?
+    let selfReported: Bool?
+    let completionNote: String?
+
+    var id: String { "\(activityId)-\(scheduledFor.timeIntervalSince1970)" }
+
+    var isOverdue: Bool {
+        status == .outstanding && scheduledFor < Date()
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case activityId = "activity_id"
+        case residentId = "resident_id"
+        case residentName = "resident_name"
+        case roomId = "room_id"
+        case activityType = "activity_type"
+        case label
+        case scheduledFor = "scheduled_for"
+        case status
+        case completedBy = "completed_by"
+        case selfReported = "self_reported"
+        case completionNote = "completion_note"
+    }
+}

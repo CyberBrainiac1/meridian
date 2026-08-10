@@ -11,11 +11,17 @@ final class ResidentDetailViewModel: ObservableObject {
     @Published private(set) var doses: [MedicationDose] = []
     /// PRN standing orders — no slot, so they never appear in the schedule view.
     @Published private(set) var prnMedications: [Medication] = []
+    /// Every scheduled activity (meal, walk, and similar) facility_activity_
+    /// schedule knows about for this resident, oldest slot first — same
+    /// 48-hour-window reasoning as `doses`.
+    @Published private(set) var activitySlots: [ActivitySlot] = []
     @Published private(set) var contacts: [EmergencyContact] = []
     @Published private(set) var handoffNotes: [HandoffNote] = []
     /// Dose ids with an RPC in flight. Same guard as AlertFeedView's
     /// submittingIds — a double-tap here would post the dose twice.
     @Published private(set) var recordingDoseIds: Set<String> = []
+    /// Activity ids with an RPC in flight — same guard as recordingDoseIds.
+    @Published private(set) var recordingActivityIds: Set<String> = []
     @Published var errorMessage: String?
     @Published var actionError: String?
 
@@ -54,6 +60,23 @@ final class ResidentDetailViewModel: ObservableObject {
             errorMessage = nil
         } catch {
             errorMessage = "Couldn't load this resident's medications. Pull to retry."
+        }
+
+        // Fetched on its own, same reasoning as the medication chart above:
+        // a failure here shouldn't blank out the MAR, and a failure in the
+        // MAR shouldn't blank out today's schedule.
+        do {
+            activitySlots = try await client
+                .from("facility_activity_schedule")
+                .select()
+                .eq("resident_id", value: residentId)
+                .order("scheduled_for", ascending: true)
+                .execute()
+                .value
+        } catch {
+            if errorMessage == nil {
+                errorMessage = "Couldn't load today's schedule. Pull to retry."
+            }
         }
 
         do {
@@ -99,6 +122,33 @@ final class ResidentDetailViewModel: ObservableObject {
         let result = await MedicationActionService.record(
             medicationId: dose.medicationId,
             scheduledFor: dose.scheduledFor,
+            status: status,
+            note: nil
+        )
+        switch result {
+        case .success:
+            await load()
+        case .failure(let error):
+            actionError = error.errorDescription
+        }
+    }
+
+    func isRecording(_ slot: ActivitySlot) -> Bool {
+        recordingActivityIds.contains(slot.id)
+    }
+
+    /// Writes through ActivityActionService (the single write path for the
+    /// schedule) and re-reads it, so the row's status comes back from the
+    /// database rather than being optimistically assumed here.
+    func record(_ slot: ActivitySlot, as status: ActivityCompletionStatus) async {
+        guard !recordingActivityIds.contains(slot.id) else { return }
+        recordingActivityIds.insert(slot.id)
+        defer { recordingActivityIds.remove(slot.id) }
+
+        actionError = nil
+        let result = await ActivityActionService.record(
+            activityId: slot.activityId,
+            scheduledFor: slot.scheduledFor,
             status: status,
             note: nil
         )

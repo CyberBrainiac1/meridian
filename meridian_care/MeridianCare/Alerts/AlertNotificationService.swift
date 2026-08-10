@@ -36,18 +36,31 @@ final class AlertNotificationService: NSObject, UNUserNotificationCenterDelegate
     // nonisolated (they're invoked directly by UNUserNotificationCenter).
     nonisolated static let categoryId = "URGENT_INCIDENT"
     nonisolated static let medicationCategoryId = "MEDICATION_DUE"
+    nonisolated static let activityCategoryId = "ACTIVITY_DUE"
+    nonisolated static let assistanceCategoryId = "ASSISTANCE_REQUEST"
     private nonisolated static let acknowledgeActionId = "ACKNOWLEDGE_ACTION"
     private nonisolated static let viewActionId = "VIEW_ACTION"
     private nonisolated static let markGivenActionId = "MARK_GIVEN_ACTION"
+    private nonisolated static let markDoneActionId = "MARK_DONE_ACTION"
+    private nonisolated static let assistanceAcknowledgeActionId = "ASSISTANCE_ACKNOWLEDGE_ACTION"
+    private nonisolated static let assistanceViewActionId = "ASSISTANCE_VIEW_ACTION"
     private nonisolated static let incidentIdKey = "incidentId"
     private nonisolated static let medicationIdKey = "medicationId"
+    private nonisolated static let activityIdKey = "activityId"
     private nonisolated static let scheduledForKey = "scheduledFor"
+    private nonisolated static let assistanceRequestIdKey = "assistanceRequestId"
 
     /// Set by RootView so a notification tap (or its "View" action) can jump
     /// straight to that incident's detail screen — the same
     /// `pendingOpenIncidentId` binding UrgentAlertOverlay's "View alert"
     /// button already drives.
     var onOpenIncident: ((String) -> Void)?
+
+    /// Set by RootView so an assistance-request notification tap (or its
+    /// "View" action) can jump to where that request is visible. Mirrors
+    /// `onOpenIncident`'s shape; see RootView for the current (deliberately
+    /// minimal) navigation behavior this drives.
+    var onOpenAssistanceRequest: ((String) -> Void)?
 
     /// Every incident id a notification has already been scheduled for this
     /// launch. AlertFeedViewModel does its own newly-appeared diffing before
@@ -106,7 +119,45 @@ final class AlertNotificationService: NSObject, UNUserNotificationCenterDelegate
             options: [.hiddenPreviewsShowTitle]
         )
 
-        center.setNotificationCategories([category, medicationCategory])
+        // Daily care activities (meals, walks, and similar) are a third,
+        // separate category — its own action ("Mark done" writes a
+        // completion row, not an administration or an incident
+        // acknowledgement) so a caregiver can mute this class of alert in
+        // iOS Settings independently of medications and falls.
+        let markDone = UNNotificationAction(
+            identifier: Self.markDoneActionId,
+            title: "Mark done",
+            options: []
+        )
+        let activityCategory = UNNotificationCategory(
+            identifier: Self.activityCategoryId,
+            actions: [markDone],
+            intentIdentifiers: [],
+            options: [.hiddenPreviewsShowTitle]
+        )
+
+        // Assistance requests share the same acknowledge/view semantics as
+        // incidents (unlike medication/activity's single "mark done" action),
+        // since they can be genuinely as urgent — a resident pressing
+        // Emergency gets the same two-action shape as a fall alert.
+        let assistanceAcknowledge = UNNotificationAction(
+            identifier: Self.assistanceAcknowledgeActionId,
+            title: "Acknowledge",
+            options: []
+        )
+        let assistanceView = UNNotificationAction(
+            identifier: Self.assistanceViewActionId,
+            title: "View",
+            options: [.foreground]
+        )
+        let assistanceCategory = UNNotificationCategory(
+            identifier: Self.assistanceCategoryId,
+            actions: [assistanceAcknowledge, assistanceView],
+            intentIdentifiers: [],
+            options: [.hiddenPreviewsShowTitle]
+        )
+
+        center.setNotificationCategories([category, medicationCategory, activityCategory, assistanceCategory])
     }
 
     func notify(for incident: IncidentEvent, copy: String) {
@@ -160,6 +211,76 @@ final class AlertNotificationService: NSObject, UNUserNotificationCenterDelegate
         UNUserNotificationCenter.current().add(request)
     }
 
+    /// Fires when a scheduled activity (meal, walk, and similar) comes due.
+    /// Deliberately `.timeSensitive` like a fall alert but WITHOUT the
+    /// klaxon — same reasoning as notifyMedicationDue: an overdue meal is
+    /// not an emergency, and giving both the same sound would train
+    /// caregivers to discount the fall alarm.
+    func notifyActivityDue(_ slot: ActivitySlot) {
+        guard !notifiedIncidentIds.contains(slot.id) else { return }
+        notifiedIncidentIds.insert(slot.id)
+
+        let content = UNMutableNotificationContent()
+        let room = slot.roomId.map { "Room \($0)" } ?? slot.residentName
+        content.title = slot.isOverdue ? "\(slot.label) overdue — \(room)" : "\(slot.label) — \(room)"
+        content.body = "\(slot.residentName): \(slot.label) at \(MeridianFormat.clockTime(slot.scheduledFor))"
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        content.categoryIdentifier = Self.activityCategoryId
+        content.userInfo = [
+            Self.activityIdKey: slot.activityId,
+            Self.scheduledForKey: ISO8601DateFormatter().string(from: slot.scheduledFor),
+        ]
+
+        let request = UNNotificationRequest(identifier: slot.id, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Fourth notification tier, for resident-initiated assistance requests
+    /// (MeridianHub's Request assistance / Call family / Emergency help
+    /// buttons). Unlike medication/activity, urgency varies by
+    /// AssistanceKind rather than being fixed for the whole tier:
+    ///   - `.emergency` — a resident pressing Emergency is genuinely as
+    ///     urgent as a detected fall, so it gets the SAME klaxon
+    ///     (`urgent_alert.caf`) and max relevanceScore as notify(for:copy:).
+    ///   - `.assistance` / `.familyContact` — routine, `.default` sound,
+    ///     same reasoning already established for medication/activity: a
+    ///     routine request must not sound like the fall alarm or caregivers
+    ///     learn to discount it.
+    /// Both use `.timeSensitive` and share `notifiedIncidentIds` for dedup —
+    /// an assistance request id and an incident id can never collide, they
+    /// come from different UUID columns.
+    func notifyAssistanceRequest(_ assistanceRequest: AssistanceRequest, copy: String) {
+        guard !notifiedIncidentIds.contains(assistanceRequest.id) else { return }
+        notifiedIncidentIds.insert(assistanceRequest.id)
+
+        let isEmergency = assistanceRequest.requestKind == .emergency
+
+        let content = UNMutableNotificationContent()
+        content.title = isEmergency
+            ? "Emergency — Room \(assistanceRequest.roomId)"
+            : "\(assistanceRequest.requestKind.label) — Room \(assistanceRequest.roomId)"
+        content.body = copy
+        content.sound = isEmergency
+            ? UNNotificationSound(named: UNNotificationSoundName("urgent_alert.caf"))
+            : .default
+        content.interruptionLevel = .timeSensitive
+        if isEmergency {
+            // Same ceiling notify(for:copy:) uses — 100 is Apple's
+            // documented max for relevanceScore, expressed here as 1.0.
+            content.relevanceScore = 1.0
+        }
+        content.categoryIdentifier = Self.assistanceCategoryId
+        content.userInfo = [Self.assistanceRequestIdKey: assistanceRequest.id]
+
+        let notificationRequest = UNNotificationRequest(
+            identifier: assistanceRequest.id,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(notificationRequest)
+    }
+
     // MARK: - UNUserNotificationCenterDelegate
 
     /// Without this, iOS suppresses banner/sound for a notification fired
@@ -177,6 +298,42 @@ final class AlertNotificationService: NSObject, UNUserNotificationCenterDelegate
         didReceive response: UNNotificationResponse
     ) async {
         let userInfo = response.notification.request.content.userInfo
+
+        // Assistance request: checked first, before the
+        // incident/medication/activity branches, since an assistance
+        // notification's userInfo carries none of those keys — same
+        // ordering discipline as the activity branch below.
+        if let assistanceRequestId = userInfo[Self.assistanceRequestIdKey] as? String {
+            switch response.actionIdentifier {
+            case Self.assistanceAcknowledgeActionId:
+                _ = await AssistanceActionService.respond(
+                    assistanceRequestId: assistanceRequestId,
+                    newStatus: .acknowledged
+                )
+            case Self.assistanceViewActionId, UNNotificationDefaultActionIdentifier:
+                await MainActor.run { self.onOpenAssistanceRequest?(assistanceRequestId) }
+            default:
+                break
+            }
+            return
+        }
+
+        // Activity reminder: "Mark done" records the completion straight
+        // from the lock screen, the same RPC the resident detail screen
+        // calls. Checked before the medication/incident branches since an
+        // activity notification's userInfo carries neither of those keys.
+        if let activityId = userInfo[Self.activityIdKey] as? String,
+           let scheduledRaw = userInfo[Self.scheduledForKey] as? String,
+           let scheduledFor = ISO8601DateFormatter().date(from: scheduledRaw) {
+            if response.actionIdentifier == Self.markDoneActionId {
+                _ = await ActivityActionService.record(
+                    activityId: activityId,
+                    scheduledFor: scheduledFor,
+                    status: .done
+                )
+            }
+            return
+        }
 
         // Medication reminder: "Mark given" records the administration
         // straight from the lock screen, the same RPC the resident detail

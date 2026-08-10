@@ -1,0 +1,49 @@
+name: MeridianHub
+options:
+  bundleIdPrefix: com.meridianhub.app
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: 2.29.0
+targets:
+  MeridianHub:
+    type: application
+    platform: iOS
+    sources:
+      - path: MeridianHub
+    resources:
+      - path: MeridianHub/Resources
+    info:
+      path: MeridianHub/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        MERIDIAN_SUPABASE_URL: $(MERIDIAN_SUPABASE_URL)
+        MERIDIAN_SUPABASE_ANON_KEY: $(MERIDIAN_SUPABASE_ANON_KEY)
+    configFiles:
+      Debug: Config/Secrets.xcconfig
+      Release: Config/Secrets.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.meridianhub.app
+        SWIFT_VERSION: 5.0
+        # iPhone only, matching Care and Family. The Hub started as an iPad
+        # room tablet; running it on the phone the resident already owns
+        # removes a piece of hardware from the deployment.
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    dependencies:
+      - package: Supabase
+        product: Supabase
+schemes:
+  MeridianHub:
+    build:
+      targets:
+        MeridianHub: all
+    run:
+      config: Debug

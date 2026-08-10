@@ -8,6 +8,9 @@ struct RootView: View {
             DailySummaryView(residents: residents)
                 .tabItem { Label("Today", systemImage: "sun.max.fill") }
 
+            MessagesView(residents: residents)
+                .tabItem { Label("Messages", systemImage: "bubble.left.and.bubble.right.fill") }
+
             UpdatesView()
                 .tabItem { Label("Updates", systemImage: "bell.fill") }
 

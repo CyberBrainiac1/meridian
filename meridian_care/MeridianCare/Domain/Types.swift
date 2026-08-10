@@ -125,6 +125,64 @@ struct IncidentEvent: Codable, Identifiable, Equatable {
     }
 }
 
+enum AssistanceKind: String, Codable {
+    case assistance, emergency
+    case familyContact = "family_contact"
+
+    var label: String {
+        switch self {
+        case .assistance: return "Assistance"
+        case .familyContact: return "Family call"
+        case .emergency: return "Emergency"
+        }
+    }
+}
+
+enum AssistanceSource: String, Codable {
+    case residentHub = "resident_hub"
+    case autoFallDispatch = "auto_fall_dispatch"
+}
+
+enum AssistanceStatus: String, Codable {
+    case open, acknowledged, resolved, cancelled
+    case enRoute = "en_route"
+
+    var isActive: Bool { self == .open || self == .acknowledged || self == .enRoute }
+}
+
+/// public.assistance_requests — a resident-initiated (or auto-fall-dispatch)
+/// call for help, distinct from incident_events: this is "someone asked",
+/// not "the system detected something". Kept as its own model and its own
+/// watcher/notification tier rather than merged into the incident feed, so
+/// "AI flagged a possible fall" and "resident pressed Emergency" stay
+/// honestly distinguishable in the UI and in the data.
+struct AssistanceRequest: Codable, Identifiable, Equatable {
+    let id: String
+    let facilityId: String
+    let residentId: String
+    let roomId: String
+    let requestKind: AssistanceKind
+    let source: AssistanceSource
+    let status: AssistanceStatus
+    let requestedAt: Date
+    let acknowledgedAt: Date?
+    let resolvedAt: Date?
+    let cancelledAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case facilityId = "facility_id"
+        case residentId = "resident_id"
+        case roomId = "room_id"
+        case requestKind = "request_kind"
+        case source, status
+        case requestedAt = "requested_at"
+        case acknowledgedAt = "acknowledged_at"
+        case resolvedAt = "resolved_at"
+        case cancelledAt = "cancelled_at"
+    }
+}
+
 /// public.resident_profiles
 struct ResidentProfile: Codable, Identifiable, Equatable {
     let id: String
