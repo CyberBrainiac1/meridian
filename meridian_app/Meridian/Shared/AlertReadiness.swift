@@ -118,12 +118,31 @@ final class AlertReadinessModel: ObservableObject {
         }
     }
 
-    /// True when the fix is "go to iOS Settings", as opposed to "wait".
+    /// True when the right action is to show the in-app iOS permission dialog.
+    /// An app that has never requested permission does not appear in iOS Settings
+    /// at all, so "Open iOS Settings" is the wrong call for this state.
+    var needsPermissionRequest: Bool {
+        authorizationStatus == .some(.notDetermined)
+    }
+
+    /// True when the fix is "go to iOS Settings" — i.e. the user already
+    /// denied or restricted permission, so only iOS can reverse it.
     var needsSystemSettings: Bool {
         switch authorizationStatus {
-        case .some(.authorized), .some(.provisional), .some(.ephemeral), .none: return false
-        default: return true
+        case .some(.authorized), .some(.provisional), .some(.ephemeral),
+             .some(.notDetermined), .none:
+            return false
+        default:
+            return true
         }
+    }
+
+    /// Request authorization for the first time. Calling this when status is
+    /// not `.notDetermined` is a no-op (iOS will not show the dialog twice).
+    func requestPermission() async {
+        _ = try? await UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .sound, .badge, .timeSensitive])
+        await refresh()
     }
 
     var timeSensitiveVerdict: Verdict {

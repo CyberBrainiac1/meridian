@@ -139,8 +139,12 @@ struct SettingsView: View {
                 title: "Alerts on this device",
                 verdict: readiness.notificationsVerdict,
                 detail: readiness.notificationsDetail,
-                actionTitle: readiness.needsSystemSettings ? "Open iOS Settings" : nil,
-                action: readiness.needsSystemSettings ? { readiness.openSystemSettings() } : nil
+                actionTitle: readiness.needsPermissionRequest
+                    ? "Enable Alerts"
+                    : readiness.needsSystemSettings ? "Open iOS Settings" : nil,
+                action: readiness.needsPermissionRequest
+                    ? { Task { await readiness.requestPermission() } }
+                    : readiness.needsSystemSettings ? { readiness.openSystemSettings() } : nil
             )
 
             Divider().overlay(style.border)
