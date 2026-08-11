@@ -62,7 +62,13 @@ struct SignInView: View {
                             RoundedRectangle(cornerRadius: AuthStyle.radius)
                                 .stroke(AuthStyle.border, lineWidth: 2)
                         )
-                    Text("For example: Lin_Nakamura")
+                    // Deliberately NOT a sample name. An example here is a
+                    // real, working username at this facility — putting one
+                    // on the sign-in screen hands a stranger half of a
+                    // credential, and on a resident's device it names an
+                    // actual person to anyone who picks the phone up.
+                    // Describe the shape instead.
+                    Text("Your first and last name, joined by an underscore.")
                         .font(.system(size: 15))
                         .foregroundStyle(AuthStyle.foregroundMuted)
                 }

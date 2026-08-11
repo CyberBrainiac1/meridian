@@ -30,7 +30,13 @@ targets:
     info:
       path: Generated/Info.plist
       properties:
-        UILaunchScreen: {}
+        # An EMPTY UILaunchScreen renders the system background, which is
+        # BLACK on a device in dark mode — so every cold start began with a
+        # black screen for as long as launch took. Naming the app's own
+        # background colour makes launch continuous with the first real
+        # frame instead of a void the user assumes is a crash.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         MERIDIAN_SUPABASE_URL: $(MERIDIAN_SUPABASE_URL)

@@ -8,6 +8,7 @@ struct PrivacyView: View {
     let residents: [FamilyLinkedResident]
     @EnvironmentObject var auth: AuthViewModel
     @State private var isShowingHelp = false
+    @State private var isShowingSettings = false
 
     var body: some View {
         NavigationStack {
@@ -60,6 +61,45 @@ struct PrivacyView: View {
                     }
                 }
 
+                // Settings is reached from here rather than from a sixth tab.
+                // The tab bar already holds five items, which is where iOS
+                // starts collapsing the rest into a "More" list — a settings
+                // screen buried one level inside an auto-generated list is
+                // worse than one row on the tab that is already titled
+                // "Privacy & account" and already carries sign-out. Everything
+                // in Settings (alert readiness, SMS consent, the account rows)
+                // is the same subject as this tab.
+                Section {
+                    Button {
+                        isShowingSettings = true
+                    } label: {
+                        HStack(spacing: FamSpacing.sm) {
+                            Image(systemName: "gearshape.fill")
+                                .foregroundStyle(FamColor.primary)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Settings")
+                                    .font(FamFont.bodyMedium(16))
+                                    .foregroundStyle(FamColor.foreground)
+                                Text("Alert checks, text message alerts, password")
+                                    .font(FamFont.body(13))
+                                    .foregroundStyle(FamColor.foregroundMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: FamSpacing.xs)
+                            Image(systemName: "chevron.right")
+                                .font(FamFont.body(13))
+                                .foregroundStyle(FamColor.foregroundMuted)
+                                .accessibilityHidden(true)
+                        }
+                        .frame(minHeight: FamTouchTarget.minSize)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Settings")
+                    .accessibilityHint("Alert checks, text message alerts, and your password")
+                }
+
                 Section {
                     Button("Sign out", role: .destructive) {
                         Task { await auth.signOut() }
@@ -81,6 +121,12 @@ struct PrivacyView: View {
             }
             .sheet(isPresented: $isShowingHelp) {
                 FamHelpTourView(topic: .privacy)
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                SettingsView(
+                    surface: .family(residents: residents),
+                    onClose: { isShowingSettings = false }
+                )
             }
         }
     }

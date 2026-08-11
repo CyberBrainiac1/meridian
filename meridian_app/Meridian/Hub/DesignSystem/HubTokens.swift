@@ -34,25 +34,33 @@ enum HubColor {
 /// Type sized for presbyopic eyes. The web Hub used 22px body / 32px+ action
 /// labels; on a phone held closer than a room tablet these land at 21pt and
 /// 30pt, still far above the 16pt/24pt floor the senior-UX audit set.
+///
+/// Every size below is multiplied by `HubTextSize.multiplier` — the resident's
+/// own Standard/Large/Largest choice from Settings. The defaults are the
+/// Standard case (multiplier 1.0), so nothing here changes for a resident who
+/// never opens Settings, and no choice can take the type BELOW these numbers.
+/// Scaling here rather than with `.dynamicTypeSize(...)` at `HubRootView` is
+/// deliberate: these are fixed point sizes, not Dynamic Type text styles, so a
+/// `dynamicTypeSize` modifier would have nothing to act on.
 enum HubFont {
     static func title(_ size: CGFloat = 40) -> Font {
-        .system(size: size, weight: .heavy, design: .default)
+        .system(size: size * HubTextSize.multiplier, weight: .heavy, design: .default)
     }
 
     static func heading(_ size: CGFloat = 30) -> Font {
-        .system(size: size, weight: .bold, design: .default)
+        .system(size: size * HubTextSize.multiplier, weight: .bold, design: .default)
     }
 
     static func action(_ size: CGFloat = 30) -> Font {
-        .system(size: size, weight: .heavy, design: .default)
+        .system(size: size * HubTextSize.multiplier, weight: .heavy, design: .default)
     }
 
     static func body(_ size: CGFloat = 21) -> Font {
-        .system(size: size, weight: .regular, design: .default)
+        .system(size: size * HubTextSize.multiplier, weight: .regular, design: .default)
     }
 
     static func bodyStrong(_ size: CGFloat = 21) -> Font {
-        .system(size: size, weight: .semibold, design: .default)
+        .system(size: size * HubTextSize.multiplier, weight: .semibold, design: .default)
     }
 }
 

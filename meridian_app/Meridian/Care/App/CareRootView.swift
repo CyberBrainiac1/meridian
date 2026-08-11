@@ -70,7 +70,9 @@ struct CareRootView: View {
                         .tabItem { Label("Residents", systemImage: "person.2") }
                         .tag(Tab.residents)
 
-                    CareSettingsView(facilityName: facilityName, role: role)
+                    SettingsView(
+                        surface: .care(facilityId: facilityId, facilityName: facilityName, role: role)
+                    )
                         .tabItem { Label("Settings", systemImage: "gearshape") }
                         .tag(Tab.settings)
                 }
@@ -147,6 +149,11 @@ struct CareRootView: View {
                 selectedTab = .alerts
             }
             AlertNotificationService.shared.requestAuthorizationAndRegisterCategory()
+            // Resolves which caregiver's muted tiers apply before any watcher
+            // has a chance to schedule something. Preferences fail OPEN until
+            // this lands, so an early notification is delivered rather than
+            // dropped.
+            CareNotificationPreferences.shared.bindToSignedInUser()
             visitorBanner.start()
             alertFeed.start()
             medicationWatcher.start()
@@ -163,26 +170,7 @@ struct CareRootView: View {
     }
 }
 
-struct CareSettingsView: View {
-    let facilityName: String
-    let role: CareFacilityRole
-    @EnvironmentObject var auth: AuthViewModel
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Facility") {
-                    LabeledContent("Name", value: facilityName)
-                    LabeledContent("Your role", value: role.rawValue.capitalized)
-                }
-                Section {
-                    Button("Sign out", role: .destructive) {
-                        Task { await auth.signOut() }
-                    }
-                    .frame(minHeight: MeridianTouchTarget.minSize)
-                }
-            }
-            .navigationTitle("Settings")
-        }
-    }
-}
+// `CareSettingsView` used to live here: a facility name, a role and a sign-out
+// button, and nothing else. It was replaced by `Shared/SettingsView.swift`,
+// which renders those same three facts alongside the alert-readiness check,
+// per-tier notification control and transparency copy this surface never had.

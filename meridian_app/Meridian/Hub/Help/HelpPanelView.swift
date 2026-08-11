@@ -14,6 +14,9 @@ import SwiftUI
 /// no space at all, and while it is open it is the only thing the resident is
 /// being asked to deal with.
 struct HelpPanelView: View {
+    /// Needed only to hand `SettingsView` the surface it styles itself from —
+    /// nothing on the help panel itself reads it.
+    let profile: HubProfile
     let onClose: () -> Void
 
     /// The unified app's auth. The Hub was a kiosk build with no way out at
@@ -22,6 +25,7 @@ struct HelpPanelView: View {
     @EnvironmentObject private var auth: AuthViewModel
 
     @State private var isConfirmingSignOut = false
+    @State private var isShowingSettings = false
 
     private struct Item: Identifiable {
         let id: String
@@ -143,6 +147,11 @@ struct HelpPanelView: View {
         } message: {
             Text("This screen will stop showing this resident's reminders and help buttons until someone signs in again.")
         }
+        // Same sheet reasoning as this panel itself: closed it occupies no
+        // space, and it can never sit on top of Emergency help.
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView(surface: .hub(profile: profile), onClose: { isShowingSettings = false })
+        }
     }
 
     // MARK: Sign out
@@ -171,6 +180,26 @@ struct HelpPanelView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(HubColor.foregroundMuted)
                 .accessibilityAddTraits(.isHeader)
+
+            // Settings sits beside sign-out and is styled exactly like it, for
+            // the same reason: most of what is behind it (the alert-readiness
+            // check, the account rows, the password change) is a staff errand,
+            // and a resident who taps into it by accident should find nothing
+            // that can hurt them. The one resident-facing control in there —
+            // text size — is safe, reversible, and worth reaching if they do
+            // find it, which is why this is muted rather than hidden.
+            Button {
+                isShowingSettings = true
+            } label: {
+                Text("Settings and text size")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(HubColor.foregroundMuted)
+                    .underline()
+                    .frame(minHeight: 44, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings and text size")
+            .accessibilityHint("Alert checks, text size, and account details.")
 
             Button {
                 isConfirmingSignOut = true

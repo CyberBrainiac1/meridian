@@ -15,6 +15,11 @@ enum MeridianSurface: Equatable {
 @MainActor
 final class AuthViewModel: ObservableObject {
     enum Step: Equatable {
+        /// Deciding whether there is already a session. Distinct from
+        /// `choosingFacility` so a returning user does not see the facility
+        /// picker flash on screen for a moment before being thrown into their
+        /// own interface — which reads as the app changing its mind.
+        case restoring
         /// Nothing chosen yet — pick a building.
         case choosingFacility
         /// Facility chosen, waiting on a name and password.
@@ -24,7 +29,7 @@ final class AuthViewModel: ObservableObject {
         case ready(MeridianSurface)
     }
 
-    @Published private(set) var step: Step = .choosingFacility
+    @Published private(set) var step: Step = .restoring
     @Published private(set) var facilities: [MeridianFacility] = []
     @Published private(set) var isLoadingFacilities = false
     @Published private(set) var isSubmitting = false
@@ -39,11 +44,21 @@ final class AuthViewModel: ObservableObject {
     func start() async {
         guard SupabaseConfig.isConfigured else {
             errorMessage = "This build has no Supabase project configured yet. A staff member needs to finish setting it up."
+            step = .choosingFacility
             return
         }
-        await loadFacilities()
-        if (try? await client.auth.session) != nil {
+
+        // Both are network round trips and neither depends on the other, so
+        // they overlap rather than queue. Serialising them doubled the time
+        // spent on the launch splash for no reason.
+        async let facilitiesLoaded: Void = loadFacilities()
+        let hasSession = (try? await client.auth.session) != nil
+        await facilitiesLoaded
+
+        if hasSession {
             await resolveSurface()
+        } else {
+            step = .choosingFacility
         }
     }
 

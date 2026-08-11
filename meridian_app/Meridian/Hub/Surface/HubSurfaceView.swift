@@ -84,8 +84,11 @@ struct HubSurfaceView: View {
         // `AuthViewModel` from the environment. Sheet content inherits the
         // presenter's environment, so this relies on the unified app having
         // injected it above HubRootView.
+        //
+        // It carries the Settings entry point too, which is why it now takes
+        // the profile — `SettingsView` styles itself from the surface.
         .sheet(isPresented: $model.isHelpOpen) {
-            HelpPanelView(onClose: { model.isHelpOpen = false })
+            HelpPanelView(profile: profile, onClose: { model.isHelpOpen = false })
         }
         // Same sheet pattern as Help: closed, it takes up no space; open, a
         // resident with a tremor still has an explicit Close button inside it

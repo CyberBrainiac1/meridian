@@ -160,6 +160,9 @@ final class AlertNotificationService: NSObject, UNUserNotificationCenterDelegate
         center.setNotificationCategories([category, medicationCategory, activityCategory, assistanceCategory])
     }
 
+    /// Deliberately consults NO preference. `CareNotificationTier.falls` has
+    /// no off switch in Settings, and this is the method that guarantee is
+    /// made of — see `CareNotificationTier.canBeDisabled`.
     func notify(for incident: IncidentEvent, copy: String) {
         guard !notifiedIncidentIds.contains(incident.id) else { return }
         notifiedIncidentIds.insert(incident.id)
@@ -191,7 +194,13 @@ final class AlertNotificationService: NSObject, UNUserNotificationCenterDelegate
     /// like a fall alert but WITHOUT the klaxon — a medication pass is
     /// time-critical, not an emergency, and giving both the same sound would
     /// train caregivers to discount the fall alarm.
+    ///
+    /// Honours the caregiver's Settings choice for this tier. The check is
+    /// here rather than at the watcher's call site so every future caller
+    /// inherits it, and it sits BEFORE the dedupe insert so a tier that is
+    /// muted now and unmuted later can still fire for a dose that is still due.
     func notifyMedicationDue(_ dose: MedicationDose) {
+        guard CareNotificationPreferences.shared.isEnabled(.medication) else { return }
         guard !notifiedIncidentIds.contains(dose.id) else { return }
         notifiedIncidentIds.insert(dose.id)
 
@@ -216,7 +225,11 @@ final class AlertNotificationService: NSObject, UNUserNotificationCenterDelegate
     /// klaxon — same reasoning as notifyMedicationDue: an overdue meal is
     /// not an emergency, and giving both the same sound would train
     /// caregivers to discount the fall alarm.
+    ///
+    /// Honours the caregiver's Settings choice for this tier, same shape as
+    /// notifyMedicationDue.
     func notifyActivityDue(_ slot: ActivitySlot) {
+        guard CareNotificationPreferences.shared.isEnabled(.activity) else { return }
         guard !notifiedIncidentIds.contains(slot.id) else { return }
         notifiedIncidentIds.insert(slot.id)
 
@@ -250,11 +263,18 @@ final class AlertNotificationService: NSObject, UNUserNotificationCenterDelegate
     /// Both use `.timeSensitive` and share `notifiedIncidentIds` for dedup —
     /// an assistance request id and an incident id can never collide, they
     /// come from different UUID columns.
+    ///
+    /// The Settings toggle for this tier ("Resident requests") governs the
+    /// routine kinds ONLY. An `.emergency` press is a resident saying they
+    /// need help right now, which is the same claim a detected fall makes, so
+    /// it rides the always-on "Falls & emergencies" guarantee and ignores the
+    /// preference entirely. A caregiver muting routine call-bells must not
+    /// silently mute the emergency button as well.
     func notifyAssistanceRequest(_ assistanceRequest: AssistanceRequest, copy: String) {
+        let isEmergency = assistanceRequest.requestKind == .emergency
+        guard isEmergency || CareNotificationPreferences.shared.isEnabled(.assistance) else { return }
         guard !notifiedIncidentIds.contains(assistanceRequest.id) else { return }
         notifiedIncidentIds.insert(assistanceRequest.id)
-
-        let isEmergency = assistanceRequest.requestKind == .emergency
 
         let content = UNMutableNotificationContent()
         content.title = isEmergency

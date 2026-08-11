@@ -16,6 +16,8 @@ struct MeridianApp: App {
         WindowGroup {
             Group {
                 switch auth.step {
+                case .restoring:
+                    RestoringView()
                 case .choosingFacility:
                     FacilityPickerView()
                 case .signingIn(let facility):
