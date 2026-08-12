@@ -25,6 +25,7 @@
     "dev": "remotion studio",
     "build": "remotion bundle",
     "render": "remotion render MeridianDemo out/meridian-demo.mp4 --codec=h264 --overwrite",
+    "render:explainer": "remotion render MeridianExplainer out/meridian-explainer.mp4 --codec=h264 --overwrite",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc"
   },
